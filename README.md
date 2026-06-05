@@ -1,0 +1,144 @@
+# ComfyUI Remote
+
+A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
+
+## Features
+
+- **Power Control** — Turn your PC on/off via Tuya smart plug
+- **PC Status** — Real-time monitoring (Offline → Booting → Online → ComfyUI Ready)
+- **ComfyUI Control** — Start ComfyUI remotely via SSH, view logs
+- **Image Generation** — Full generation screen with:
+  - 4 LoRA slots
+  - Sampler, scheduler, steps, CFG, denoise controls
+  - Resolution presets including RedMagic 10S Pro wallpaper sizes
+  - Upscale toggle (RealESRGAN x2 via UltimateSDUpscale)
+  - Batch generation (up to 50 images)
+- **Gallery** — Browse locally saved images and ComfyUI history
+  - Swipeable fullscreen viewer
+  - Multi-select delete
+  - Load generation settings from image metadata
+- **Settings persistence** — Settings saved to `Downloads/ComfyUI/settings.json`
+- **PNG metadata** — Workflow embedded in saved images for settings recovery
+- **Tablet layout** — Side navigation rail on iPad/large screens
+
+---
+
+## Requirements
+
+- Flutter 3.x+
+- Android 10+ or iOS 16+
+- ComfyUI running on a PC accessible via Tailscale or local network
+- Tuya smart plug (EU region) for power control
+- SSH access to the PC
+
+---
+
+## Setup
+
+### 1. Clone the repo
+
+```bash
+git clone https://gitlab.com/yourname/comfy_remote.git
+cd comfy_remote
+flutter pub get
+```
+
+### 2. Configure the app
+
+Open the app and go to **Settings** (gear icon), fill in:
+
+| Setting | Description |
+|---|---|
+| ComfyUI URL | e.g. `http://100.82.84.36:8000` |
+| SSH Host | Tailscale IP of your PC |
+| SSH User | Your Windows username |
+| SSH Password | Your Windows password |
+| Tuya Client ID | From Tuya IoT Platform |
+| Tuya Client Secret | From Tuya IoT Platform |
+| Tuya Device ID | Your smart plug device ID |
+
+### 3. Tuya setup
+
+1. Create an account at [iot.tuya.com](https://iot.tuya.com)
+2. Create a Cloud Project (EU region)
+3. Link your smart plug device
+4. Copy Client ID, Client Secret and Device ID to app settings
+
+### 4. SSH setup
+
+The app uses SSH to:
+- Check if PC is reachable
+- Start ComfyUI
+- View ComfyUI logs
+- Shutdown PC
+
+Make sure your PC allows password SSH. On Windows enable OpenSSH Server in Settings → Optional Features.
+
+---
+
+## Building
+
+### Android
+
+```bash
+flutter build apk --release
+```
+APK will be at `build/app/outputs/flutter-apk/app-release.apk`
+
+### iOS (requires Mac + Xcode)
+
+```bash
+flutter build ios
+open ios/Runner.xcworkspace
+```
+Then deploy via Xcode to your device.
+
+---
+
+## Project Structure
+
+```
+lib/
+├── main.dart                   # App entry, navigation shell (phone/tablet)
+├── screens/
+│   ├── home_screen.dart        # PC power control and status
+│   ├── generate_screen.dart    # Image generation UI
+│   ├── gallery_screen.dart     # Local and remote image gallery
+│   └── settings_screen.dart    # App configuration
+└── services/
+    ├── settings_service.dart   # SharedPreferences wrapper
+    ├── tuya_service.dart        # Tuya smart plug API
+    ├── ssh_service.dart         # SSH commands
+    ├── comfy_service.dart       # ComfyUI API + workflow builder
+    ├── generation_prefs.dart    # Generation settings persistence
+    └── png_metadata.dart        # PNG tEXt chunk reader/writer
+```
+
+---
+
+## ComfyUI Workflow
+
+The app builds a clean API-format workflow supporting:
+- CheckpointLoaderSimple
+- Up to 4 chained LoraLoader nodes
+- CLIPTextEncode (positive + negative)
+- EmptyLatentImage
+- KSampler (with denoise)
+- VAEDecode
+- SaveImage
+- Optional UltimateSDUpscale with RealESRGAN_x2
+
+---
+
+## Notes
+
+- Images are saved to `Downloads/ComfyUI/` on the device with embedded workflow metadata
+- Settings can be loaded from any generated image via Gallery → fullscreen → tune icon
+- The app uses HTTP (not HTTPS) to connect to ComfyUI — make sure your network allows this
+- On iOS add `NSAppTransportSecurity` to `Info.plist` to allow HTTP connections
+
+---
+
+## License
+
+MIT

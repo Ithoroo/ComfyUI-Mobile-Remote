@@ -1,0 +1,24 @@
+name: comfy_remote
+description: ComfyUI Remote Control with Tuya & SSH
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_inappwebview: ^6.1.5   # WebView for ComfyUI
+  dartssh2: ^2.9.0                # SSH for shutdown
+  http: ^1.2.2                    # Tuya API calls
+  crypto: ^3.0.3                  # HMAC-SHA256 signing for Tuya
+  shared_preferences: ^2.2.3      # Store settings locally
+  path_provider: ^2.1.4           # For saving files to device
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true

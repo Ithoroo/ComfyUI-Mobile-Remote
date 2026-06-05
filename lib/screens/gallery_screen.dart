@@ -245,8 +245,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
     }
     return GridView.builder(
       padding: const EdgeInsets.all(4),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: MediaQuery.of(context).size.shortestSide >= 600 ? 5 : 3,
         crossAxisSpacing: 4,
         mainAxisSpacing: 4,
       ),
@@ -296,8 +296,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
     }
     return GridView.builder(
       padding: const EdgeInsets.all(4),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: MediaQuery.of(context).size.shortestSide >= 600 ? 5 : 3,
         crossAxisSpacing: 4,
         mainAxisSpacing: 4,
       ),

@@ -285,8 +285,11 @@ class _GenerateScreenState extends State<GenerateScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -526,6 +529,8 @@ class _GenerateScreenState extends State<GenerateScreen> {
             ),
             const SizedBox(height: 32),
           ],
+        ),
+      ),
         ),
       ),
     );

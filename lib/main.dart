@@ -44,7 +44,7 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _tab = 0;
   int _galleryKey = 0;
-  int _generateKey = 0; // increment to force GenerateScreen to reload prefs
+  int _generateKey = 0;
   late SettingsService _settings;
 
   @override
@@ -56,8 +56,8 @@ class _MainShellState extends State<MainShell> {
   Future<void> _onLoadSettings(Map<String, dynamic> settings) async {
     await GenerationPrefs.save(settings);
     setState(() {
-      _tab = 1; // switch to Generate tab
-      _generateKey++; // force GenerateScreen to reload prefs
+      _tab = 1;
+      _generateKey++;
     });
   }
 
@@ -68,26 +68,76 @@ class _MainShellState extends State<MainShell> {
     });
   }
 
+  // iPad: screen width >= 600 uses side rail instead of bottom nav
+  bool _isTablet(BuildContext context) =>
+      MediaQuery.of(context).size.shortestSide >= 600;
+
   @override
   Widget build(BuildContext context) {
     final comfyUrl = _settings.comfyUrl;
+    final isTablet = _isTablet(context);
 
+    final screens = [
+      HomeScreen(prefs: widget.prefs),
+      comfyUrl.isNotEmpty
+          ? GenerateScreen(key: ValueKey(_generateKey), comfyUrl: comfyUrl)
+          : const _NotConfigured(),
+      comfyUrl.isNotEmpty
+          ? GalleryScreen(
+              key: ValueKey(_galleryKey),
+              comfyUrl: comfyUrl,
+              onLoadSettings: _onLoadSettings,
+            )
+          : const _NotConfigured(),
+    ];
+
+    if (isTablet) {
+      return Scaffold(
+        body: Row(
+          children: [
+            // ── Side navigation rail ─────────────────────────────────────
+            NavigationRail(
+              selectedIndex: _tab,
+              onDestinationSelected: _onTabChanged,
+              labelType: NavigationRailLabelType.all,
+              minWidth: 88,
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              destinations: const [
+                NavigationRailDestination(
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home),
+                  label: Text('Home'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.auto_awesome_outlined),
+                  selectedIcon: Icon(Icons.auto_awesome),
+                  label: Text('Generate'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.photo_library_outlined),
+                  selectedIcon: Icon(Icons.photo_library),
+                  label: Text('Gallery'),
+                ),
+              ],
+            ),
+            const VerticalDivider(thickness: 1, width: 1),
+            // ── Main content ─────────────────────────────────────────────
+            Expanded(
+              child: IndexedStack(
+                index: _tab,
+                children: screens,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // ── Phone layout — bottom navigation ──────────────────────────────────
     return Scaffold(
       body: IndexedStack(
         index: _tab,
-        children: [
-          HomeScreen(prefs: widget.prefs),
-          comfyUrl.isNotEmpty
-              ? GenerateScreen(key: ValueKey(_generateKey), comfyUrl: comfyUrl)
-              : const _NotConfigured(),
-          comfyUrl.isNotEmpty
-              ? GalleryScreen(
-                  key: ValueKey(_galleryKey),
-                  comfyUrl: comfyUrl,
-                  onLoadSettings: _onLoadSettings,
-                )
-              : const _NotConfigured(),
-        ],
+        children: screens,
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,

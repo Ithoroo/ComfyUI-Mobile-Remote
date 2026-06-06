@@ -14,6 +14,8 @@ dependencies:
   crypto: ^3.0.3                  # HMAC-SHA256 signing for Tuya
   shared_preferences: ^2.2.3      # Store settings locally
   path_provider: ^2.1.4           # For saving files to device
+  wakelock_plus: ^1.1.4           # Keep CPU alive during generation
+  flutter_foreground_task: ^8.0.0 # Foreground service for background generation
 
 dev_dependencies:
   flutter_test:

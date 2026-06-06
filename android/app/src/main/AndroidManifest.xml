@@ -5,6 +5,14 @@
     <!-- Save images to Downloads folder -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <!-- Foreground service for background generation -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Wake lock to keep network alive -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
 
     <application
         android:label="ComfyUI Remote"
@@ -30,6 +38,11 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Foreground service for generation -->
+        <service
+            android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false"/>
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

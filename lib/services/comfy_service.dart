@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 /// Talks to the ComfyUI HTTP API to queue prompts and fetch results.
@@ -61,8 +62,9 @@ class ComfyService {
   /// Polls history until the prompt is done.
   /// Returns map with 'regular' and 'upscaled' image filenames.
   Future<Map<String, String?>> waitForResultMap(String promptId,
-      {Duration interval = const Duration(seconds: 2),
-      int maxAttempts = 300}) async {
+      {Duration interval = const Duration(seconds: 1),
+      int maxAttempts = 600,
+      bool expectUpscale = false}) async {
     for (var i = 0; i < maxAttempts; i++) {
       await Future.delayed(interval);
       final res = await http.get(Uri.parse('$baseUrl/history/$promptId'));
@@ -70,23 +72,22 @@ class ComfyService {
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       if (!data.containsKey(promptId)) continue;
       final outputs = data[promptId]['outputs'] as Map<String, dynamic>;
-      String? regular;
-      String? upscaled;
+      final allImages = <String>[];
       for (final node in outputs.values) {
         if (node['images'] != null) {
           for (final img in node['images']) {
             if (img['type'] == 'output') {
-              final fname = img['filename'] as String;
-              if (fname.startsWith('mobile_upscaled')) {
-                upscaled = fname;
-              } else {
-                regular = fname;
-              }
+              allImages.add(img['filename'] as String);
             }
           }
         }
       }
-      if (regular != null || upscaled != null) {
+      // If upscale expected, wait until we have 2 images
+      if (expectUpscale && allImages.length < 2) continue;
+      if (allImages.isNotEmpty) {
+        final regular = allImages.first;
+        final upscaled = allImages.length > 1 ? allImages.last : null;
+        debugPrint('[ComfyService] result: regular=$regular upscaled=$upscaled');
         return {'regular': regular, 'upscaled': upscaled};
       }
     }
@@ -266,7 +267,7 @@ class ComfyService {
       };
       workflow[upSaveNode] = {
         'class_type': 'SaveImage',
-        'inputs': {'images': [upNode, 0], 'filename_prefix': 'mobile_upscaled'},
+        'inputs': {'images': [upNode, 0], 'filename_prefix': 'mobile'},
       };
     } else {
       workflow[saveNode] = {
@@ -290,6 +291,7 @@ class ComfyService {
     if (histRes.statusCode != 200) throw Exception('Failed to fetch history');
 
     final history = jsonDecode(histRes.body) as Map<String, dynamic>;
+    debugPrint('[Gallery] history entries: ${history.length}');
     for (final entry in history.values) {
       final outputs = entry['outputs'] as Map<String, dynamic>? ?? {};
       for (final node in outputs.values) {
@@ -309,7 +311,7 @@ class ComfyService {
       }
     }
 
-    // Newest first
+    // Newest first — all files share same prefix so alphabetical = chronological
     images.sort((a, b) =>
         (b['filename'] as String).compareTo(a['filename'] as String));
     return images;

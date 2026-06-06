@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'screens/home_screen.dart';
 import 'screens/generate_screen.dart';
 import 'screens/gallery_screen.dart';
@@ -8,6 +9,8 @@ import 'services/generation_prefs.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Request battery optimization exemption so Android doesn't kill network
+  await FlutterForegroundTask.requestIgnoreBatteryOptimization();
   final prefs = await SharedPreferences.getInstance();
   runApp(ComfyRemoteApp(prefs: prefs));
 }

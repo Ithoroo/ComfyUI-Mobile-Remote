@@ -67,8 +67,29 @@ class _GalleryScreenState extends State<GalleryScreen> {
   Future<void> _loadRemote() async {
     try {
       final images = await _comfy.getOutputImages();
-      setState(() => _remoteImages = images);
-    } catch (_) {}
+      images.sort((a, b) {
+        final aNum = int.tryParse(RegExp(r'(\d+)_\.').firstMatch(a['filename'] as String)?.group(1) ?? '0') ?? 0;
+        final bNum = int.tryParse(RegExp(r'(\d+)_\.').firstMatch(b['filename'] as String)?.group(1) ?? '0') ?? 0;
+        return bNum.compareTo(aNum);
+      });
+      // Check all URLs in parallel - much faster than sequential
+      final results = await Future.wait(
+        images.map((img) async {
+          try {
+            final res = await http.head(Uri.parse(img['url'] as String))
+                .timeout(const Duration(seconds: 5));
+            return res.statusCode == 200 ? img : null;
+          } catch (_) {
+            return null;
+          }
+        }),
+      );
+      final valid = results.whereType<Map<String, dynamic>>().toList();
+      debugPrint('[Gallery] remote: ${images.length} total, ${valid.length} valid');
+      if (mounted) setState(() => _remoteImages = valid);
+    } catch (e) {
+      debugPrint('[Gallery] _loadRemote error: $e');
+    }
   }
 
   Future<void> _saveRemoteImage(Map<String, dynamic> img) async {
@@ -243,7 +264,9 @@ class _GalleryScreenState extends State<GalleryScreen> {
     if (_localImages.isEmpty) {
       return const Center(child: Text('No images saved locally yet'));
     }
-    return GridView.builder(
+    return RefreshIndicator(
+      onRefresh: _loadLocal,
+      child: GridView.builder(
       padding: const EdgeInsets.all(4),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: MediaQuery.of(context).size.shortestSide >= 600 ? 5 : 3,
@@ -288,6 +311,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
           ),
         );
       },
+      ),
     );
   }
 
@@ -315,7 +339,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
             loadingBuilder: (ctx, child, progress) =>
                 progress == null ? child
                     : const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-            errorBuilder: (ctx, e, _) => const Icon(Icons.broken_image),
+            errorBuilder: (ctx, e, _) => const Icon(Icons.broken_image, color: Colors.grey),
           ),
         );
       },
@@ -592,6 +616,51 @@ class _ZoomableImageState extends State<_ZoomableImage>
         panEnabled: true,
         scaleEnabled: true,
         child: Center(child: widget.child),
+      ),
+    );
+  }
+}
+
+// ── Self-filtering remote image cell ──────────────────────────────────────
+class _RemoteImageCell extends StatefulWidget {
+  final Map<String, dynamic> img;
+  final VoidCallback onError;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+  const _RemoteImageCell({
+    required this.img,
+    required this.onError,
+    required this.onTap,
+    required this.onLongPress,
+  });
+  @override
+  State<_RemoteImageCell> createState() => _RemoteImageCellState();
+}
+
+class _RemoteImageCellState extends State<_RemoteImageCell> {
+  bool _failed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_failed) return const SizedBox.shrink();
+    return GestureDetector(
+      onTap: widget.onTap,
+      onLongPress: widget.onLongPress,
+      child: Image.network(
+        widget.img['url'] as String,
+        fit: BoxFit.cover,
+        loadingBuilder: (ctx, child, progress) =>
+            progress == null ? child
+                : const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        errorBuilder: (ctx, e, _) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() => _failed = true);
+              widget.onError();
+            }
+          });
+          return const SizedBox.shrink();
+        },
       ),
     );
   }

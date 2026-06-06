@@ -6,6 +6,8 @@ import 'package:path_provider/path_provider.dart';
 import '../services/comfy_service.dart';
 import '../services/generation_prefs.dart';
 import '../services/png_metadata.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 class GenerateScreen extends StatefulWidget {
   final String comfyUrl;
@@ -45,6 +47,8 @@ class _GenerateScreenState extends State<GenerateScreen> {
   // ── Text controllers (needed so prefs can update fields after build) ────────
   late TextEditingController _posCtrl;
   late TextEditingController _negCtrl;
+  late TextEditingController _widthCtrl;
+  late TextEditingController _heightCtrl;
 
   // ── UI state ───────────────────────────────────────────────────────────────
   List<String>    _checkpoints  = [];
@@ -56,15 +60,19 @@ class _GenerateScreenState extends State<GenerateScreen> {
   List<Uint8List> _resultImages = [];
   int             _currentImage = 0;
 
-  // Presets
+  // ── Queue ──────────────────────────────────────────────────────────────────
+  final List<Map<String, dynamic>> _queue = [];
+  bool _processingQueue = false;
+
+  // Presets — 'Custom' = user enters their own resolution
   static const _resolutions = {
-    'Portrait 832×1216':               (832, 1216),
-    'Landscape 1216×832':              (1216, 832),
-    'Square 1024×1024':                (1024, 1024),
-    'Portrait 768×1344':               (768, 1344),
-    'RedMagic Portrait 608×1344':      (608, 1344),  // → 1216×2688 after 2x upscale
-    'RedMagic Landscape 1344×608':     (1344, 608),  // → 2688×1216 after 2x upscale
+    'Custom':                          (832, 1216),
+    'RedMagic Portrait 608×1344':      (608, 1344),
+    'RedMagic Landscape 1344×608':     (1344, 608),
   };
+
+  bool get _isCustomResolution => _selectedResolution == 'Custom';
+  String _selectedResolution = 'Custom';
 
   @override
   void initState() {
@@ -73,6 +81,8 @@ class _GenerateScreenState extends State<GenerateScreen> {
     _comfy = ComfyService(widget.comfyUrl);
     _posCtrl = TextEditingController(text: _positivePrompt);
     _negCtrl = TextEditingController(text: _negativePrompt);
+    _widthCtrl = TextEditingController(text: _width.toString());
+    _heightCtrl = TextEditingController(text: _height.toString());
     _loadOptions();
   }
 
@@ -101,6 +111,14 @@ class _GenerateScreenState extends State<GenerateScreen> {
       _useUpscale    = p['upscale']       ?? _useUpscale;
       _width         = p['width']         ?? _width;
       _height        = p['height']        ?? _height;
+      _selectedResolution = p['resPreset'] ?? _selectedResolution;
+      // Update text controllers to reflect loaded values
+      _widthCtrl.text  = _width.toString();
+      _heightCtrl.text = _height.toString();
+      // If loaded from image metadata (no resPreset), force Custom
+      if (p['resPreset'] == null && (p['width'] != null || p['height'] != null)) {
+        _selectedResolution = 'Custom';
+      }
       _steps         = p['steps']         ?? _steps;
       _cfg           = (p['cfg']          as num?)?.toDouble() ?? _cfg;
       _sampler       = p['sampler']       ?? _sampler;
@@ -115,6 +133,8 @@ class _GenerateScreenState extends State<GenerateScreen> {
   void dispose() {
     _posCtrl.dispose();
     _negCtrl.dispose();
+    _widthCtrl.dispose();
+    _heightCtrl.dispose();
     super.dispose();
   }
 
@@ -135,6 +155,7 @@ class _GenerateScreenState extends State<GenerateScreen> {
       'upscale':     _useUpscale,
       'width':       _width,
       'height':      _height,
+      'resPreset':   _selectedResolution,
       'steps':       _steps,
       'cfg':         _cfg,
       'sampler':     _sampler,
@@ -198,6 +219,180 @@ class _GenerateScreenState extends State<GenerateScreen> {
     );
   }
 
+  // Capture current settings as a snapshot
+  Map<String, dynamic> _captureSettings() => {
+    'checkpoint':  _checkpoint,
+    'positive':    _positivePrompt,
+    'negative':    _negativePrompt,
+    'width':       _width,
+    'height':      _height,
+    'steps':       _steps,
+    'cfg':         _cfg,
+    'sampler':     _sampler,
+    'scheduler':   _scheduler,
+    'denoise':     _denoise,
+    'lora1':       _lora1,   'lora1s': _lora1Strength,
+    'lora2':       _lora2,   'lora2s': _lora2Strength,
+    'lora3':       _lora3,   'lora3s': _lora3Strength,
+    'lora4':       _lora4,   'lora4s': _lora4Strength,
+    'upscale':     _useUpscale,
+    'batch':       _batchCount,
+    'randomSeed':  _randomSeed,
+    'seed':        _seed,
+  };
+
+  void _addToQueue() {
+    if (_positivePrompt.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a prompt')),
+      );
+      return;
+    }
+    setState(() => _queue.add(_captureSettings()));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Added to queue (${_queue.length} total)')),
+    );
+    if (!_processingQueue) _processQueue();
+  }
+
+  Future<void> _processQueue() async {
+    if (_processingQueue || _queue.isEmpty) return;
+    _processingQueue = true;
+    await WakelockPlus.enable();
+
+    // Init foreground service
+    FlutterForegroundTask.init(
+      androidNotificationOptions: AndroidNotificationOptions(
+        channelId: 'comfy_generation',
+        channelName: 'ComfyUI Generation',
+        channelDescription: 'Keeps generation running in background',
+        channelImportance: NotificationChannelImportance.LOW,
+        priority: NotificationPriority.LOW,
+      ),
+      iosNotificationOptions: const IOSNotificationOptions(),
+      foregroundTaskOptions: ForegroundTaskOptions(
+        eventAction: ForegroundTaskEventAction.nothing(),
+        autoRunOnBoot: false,
+      ),
+    );
+
+    // Request notification permission and start service
+    final notifPerm = await FlutterForegroundTask.checkNotificationPermission();
+    if (notifPerm != NotificationPermission.granted) {
+      await FlutterForegroundTask.requestNotificationPermission();
+    }
+    await FlutterForegroundTask.startService(
+      serviceId: 1000,
+      notificationTitle: 'ComfyUI Remote',
+      notificationText: 'Starting generation...',
+    );
+
+    while (_queue.isNotEmpty) {
+      final job = _queue.first;
+      final batch = job['batch'] as int;
+      final queueLen = _queue.length;
+      await FlutterForegroundTask.updateService(
+        notificationTitle: 'ComfyUI Remote — Generating',
+        notificationText: 'Batch of $batch${queueLen > 1 ? " • ${queueLen - 1} more in queue" : ""}',
+      );
+      await _runJob(job);
+      if (mounted) setState(() => _queue.removeAt(0));
+    }
+
+    await FlutterForegroundTask.stopService();
+    await WakelockPlus.disable();
+    _processingQueue = false;
+  }
+
+  Future<void> _runJob(Map<String, dynamic> job) async {
+    final checkpoint = job['checkpoint'] as String;
+    final positive   = job['positive']   as String;
+    final negative   = job['negative']   as String;
+    final width      = job['width']      as int;
+    final height     = job['height']     as int;
+    final steps      = job['steps']      as int;
+    final cfg        = (job['cfg']       as num).toDouble();
+    final sampler    = job['sampler']    as String;
+    final scheduler  = job['scheduler']  as String;
+    final denoise    = (job['denoise']   as num).toDouble();
+    final lora1      = job['lora1']      as String;
+    final lora1s     = (job['lora1s']    as num).toDouble();
+    final lora2      = job['lora2']      as String;
+    final lora2s     = (job['lora2s']    as num).toDouble();
+    final lora3      = job['lora3']      as String;
+    final lora3s     = (job['lora3s']    as num).toDouble();
+    final lora4      = job['lora4']      as String;
+    final lora4s     = (job['lora4s']    as num).toDouble();
+    final upscale    = job['upscale']    as bool;
+    final batch      = job['batch']      as int;
+    final randomSeed = job['randomSeed'] as bool;
+    final baseSeed   = job['seed']       as int;
+
+    if (mounted) setState(() { _loading = true; _status = 'Starting...'; _resultImages = []; _currentImage = 0; });
+
+    try {
+      final dlDir = Directory('/storage/emulated/0/Download/ComfyUI');
+      if (!await dlDir.exists()) await dlDir.create(recursive: true);
+
+      for (int i = 0; i < batch; i++) {
+        final qInfo = _queue.length > 1 ? ' (${_queue.length - 1} queued)' : '';
+        final seed = randomSeed ? Random().nextInt(2147483647) : baseSeed + i;
+        if (mounted) setState(() => _status = 'Image ${i + 1}/$batch — queuing$qInfo');
+
+        final workflow = ComfyService.buildWorkflow(
+          checkpoint:     checkpoint,
+          positivePrompt: positive,
+          negativePrompt: negative,
+          width:          width,
+          height:         height,
+          steps:          steps,
+          cfg:            cfg,
+          sampler:        sampler,
+          scheduler:      scheduler,
+          seed:           seed,
+          denoise:        denoise,
+          lora1Name:      lora1, lora1Strength: lora1s,
+          lora2Name:      lora2, lora2Strength: lora2s,
+          lora3Name:      lora3, lora3Strength: lora3s,
+          lora4Name:      lora4, lora4Strength: lora4s,
+          useUpscale:     upscale,
+        );
+
+        final promptId = await _comfy.queuePrompt(workflow);
+        if (mounted) setState(() => _status = 'Image ${i + 1}/$batch — generating$qInfo');
+        await FlutterForegroundTask.updateService(
+          notificationTitle: 'ComfyUI Remote — Generating',
+          notificationText: 'Image ${i + 1}/$batch${_queue.length > 1 ? " • ${_queue.length - 1} more in queue" : ""}',
+        );
+
+        final result = await _comfy.waitForResultMap(promptId);
+        final targetFile = result['upscaled'] ?? result['regular'];
+        if (targetFile == null) throw Exception('No output image found');
+        final imageBytes = await _comfy.getImage(targetFile);
+        debugPrint('[Generate] got image: $targetFile (upscaled: ${result['upscaled'] != null})');
+
+        if (mounted) setState(() {
+          _resultImages.add(imageBytes);
+          _currentImage = _resultImages.length - 1;
+        });
+
+        try {
+          final file = File('${dlDir.path}/comfy_${DateTime.now().millisecondsSinceEpoch}.png');
+          final bytesWithMeta = PngMetadata.embedPrompt(imageBytes, workflow);
+          await file.writeAsBytes(bytesWithMeta);
+          debugPrint('[Save] saved to ${file.path} (${bytesWithMeta.length} bytes)');
+        } catch (e) {
+          debugPrint('[Save] failed: $e');
+        }
+      }
+      if (mounted) setState(() => _status = 'Done! $batch image${batch > 1 ? "s" : ""} generated.');
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Error: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   Future<void> _generate() async {
     if (_positivePrompt.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -205,73 +400,9 @@ class _GenerateScreenState extends State<GenerateScreen> {
       );
       return;
     }
-
-    setState(() { _loading = true; _status = 'Starting batch...'; _resultImages = []; _currentImage = 0; });
-    _savePrefs(); // persist settings
-
-    try {
-      final dlDir = Directory('/storage/emulated/0/Download/ComfyUI');
-      if (!await dlDir.exists()) await dlDir.create(recursive: true);
-
-      for (int i = 0; i < _batchCount; i++) {
-        final seed = _randomSeed ? Random().nextInt(2147483647) : _seed + i;
-        setState(() => _status = 'Image ${i + 1}/$_batchCount — queuing (seed: $seed)');
-
-        final workflow = ComfyService.buildWorkflow(
-          checkpoint:      _checkpoint,
-          positivePrompt:  _positivePrompt,
-          negativePrompt:  _negativePrompt,
-          width:           _width,
-          height:          _height,
-          steps:           _steps,
-          cfg:             _cfg,
-          sampler:         _sampler,
-          scheduler:       _scheduler,
-          seed:            seed,
-          denoise:         _denoise,
-          lora1Name:       _lora1,
-          lora1Strength:   _lora1Strength,
-          lora2Name:       _lora2,
-          lora2Strength:   _lora2Strength,
-          lora3Name:       _lora3,
-          lora3Strength:   _lora3Strength,
-          lora4Name:       _lora4,
-          lora4Strength:   _lora4Strength,
-          useUpscale:      _useUpscale,
-        );
-
-        final promptId = await _comfy.queuePrompt(workflow);
-        setState(() => _status = 'Image ${i + 1}/$_batchCount — generating...');
-
-        final result = await _comfy.waitForResultMap(promptId);
-        // Use upscaled if available, otherwise regular
-        final targetFile = result['upscaled'] ?? result['regular'];
-        if (targetFile == null) throw Exception('No output image found');
-        final imageBytes = await _comfy.getImage(targetFile);
-        debugPrint('[Generate] got image: $targetFile (upscaled: ${result['upscaled'] != null})');
-
-        setState(() {
-          _resultImages.add(imageBytes);
-          _currentImage = _resultImages.length - 1;
-        });
-
-        // Auto-save with embedded metadata
-        try {
-          final file = File('${dlDir.path}/comfy_${DateTime.now().millisecondsSinceEpoch}.png');
-          // Embed the workflow JSON into the PNG so settings can be recovered later
-          final bytesWithMeta = PngMetadata.embedPrompt(imageBytes, workflow);
-          await file.writeAsBytes(bytesWithMeta);
-        } catch (e) {
-          debugPrint('[Save] failed: $e');
-        }
-      }
-
-      setState(() => _status = 'Done! $_batchCount image${_batchCount > 1 ? "s" : ""} generated.');
-    } catch (e) {
-      setState(() => _status = 'Error: $e');
-    } finally {
-      setState(() => _loading = false);
-    }
+    _savePrefs();
+    setState(() => _queue.insert(0, _captureSettings()));
+    if (!_processingQueue) _processQueue();
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -434,6 +565,44 @@ class _GenerateScreenState extends State<GenerateScreen> {
                 );
               }).toList(),
             ),
+            if (_isCustomResolution) ...[
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _widthCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Width',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                    keyboardType: TextInputType.number,
+                    onChanged: (v) {
+                      final val = int.tryParse(v);
+                      if (val != null && val > 0) setState(() => _width = val);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text('×', style: TextStyle(fontSize: 18)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextFormField(
+                    controller: _heightCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Height',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                    keyboardType: TextInputType.number,
+                    onChanged: (v) {
+                      final val = int.tryParse(v);
+                      if (val != null && val > 0) setState(() => _height = val);
+                    },
+                  ),
+                ),
+              ]),
+            ],
             const SizedBox(height: 16),
 
             // ── Sampler ────────────────────────────────────────────────────
@@ -532,17 +701,40 @@ class _GenerateScreenState extends State<GenerateScreen> {
             ),
             const SizedBox(height: 8),
 
-            // ── Generate button ────────────────────────────────────────────
-            FilledButton.icon(
-              onPressed: _loading ? null : _generate,
-              icon: _loading
-                  ? const SizedBox(width: 18, height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.auto_awesome),
-              label: Text(_loading ? 'Generating...' : 'Generate'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
+            // ── Queue status ───────────────────────────────────────────────
+            if (_queue.length > 1)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  '${_queue.length - 1} job${_queue.length > 2 ? "s" : ""} waiting in queue',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.deepPurple),
+                ),
               ),
+
+            // ── Generate button ────────────────────────────────────────────
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _loading ? null : _generate,
+                    icon: _loading
+                        ? const SizedBox(width: 18, height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.auto_awesome),
+                    label: Text(_loading ? 'Generating...' : 'Generate'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  onPressed: _addToQueue,
+                  icon: const Icon(Icons.queue),
+                  label: Text(_queue.isEmpty ? 'Queue' : '+${_queue.length}'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.deepPurple.shade700,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 32),
           ],

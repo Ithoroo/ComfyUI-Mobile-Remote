@@ -17,15 +17,23 @@ A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 ### 🎨 Image Generation
 - 4 LoRA slots with strength sliders
 - Sampler, scheduler, steps, CFG, denoise controls
-- Resolution presets including **RedMagic 10S Pro** wallpaper sizes
+- **Custom resolution** input + RedMagic 10S Pro presets
 - **Upscale toggle** (RealESRGAN x2 via UltimateSDUpscale)
 - Batch generation (up to 50 images)
+- **Generation queue** — add jobs while current batch is running
+- **Settings snapshot** — changing settings mid-batch doesn't affect current job
+- **Foreground service** — generation continues with screen locked, with notification showing progress
+- **Battery optimization exemption** — Android won't kill the app during long batches
 
 ### 🖼️ Gallery
 - Browse locally saved images and ComfyUI history
 - Swipeable fullscreen viewer with **pinch & double-tap zoom**
+- Page lock when zoomed in (no accidental swipes)
+- **9:16 aspect ratio** grid for portrait images
+- **Pull to refresh** in local gallery
 - Multi-select delete
 - Load generation settings from image PNG metadata
+- Remote gallery filters out deleted/missing images automatically
 
 ### ⚙️ Settings & Persistence
 - Settings saved to `Downloads/ComfyUI/settings.json`
@@ -48,6 +56,39 @@ A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 - [ ] **Local ComfyUI detection** — auto-discover ComfyUI instances on the local network (current version requires Tailscale IP)
 - [ ] **Multi-instance selector** — detect multiple ComfyUI machines on the network and switch between them by name
 - [ ] **mDNS/Bonjour discovery** — zero-config connection without manually entering IP addresses
+- [ ] **Connection profiles** — save multiple server configurations and switch quickly
+
+### 🎨 Generation
+- [x] **Generation queue** — queue multiple jobs, processed sequentially ✅
+- [x] **Settings snapshot** — settings locked at generation time, UI changes don't affect running jobs ✅
+- [x] **Custom resolution input** — enter any width/height instead of fixed presets ✅
+- [x] **Upscale toggle** — RealESRGAN x2 toggle visible in UI ✅
+- [ ] **LoRA strength sliders** — individual strength bar under each LoRA selector in the UI
+- [ ] **Image to video** — send generated images directly to Wan 2.2 I2V workflow
+- [ ] **Text to video** — T2V workflow support from the generate screen
+- [ ] **Prompt history** — save and reuse previous prompts
+- [ ] **Wildcard support** — random prompt variations
+
+### 🔔 Notifications
+- [x] **Background notifications** — foreground service shows generation progress when app is minimized ✅
+- [x] **Battery optimization exemption** — Android won't kill the app during long batches ✅
+- [ ] **Push notifications** — notify when generation is complete (even when app is closed)
+- [ ] **Generation progress** — live step counter during generation
+
+### 🖼️ Gallery
+- [x] **Double-tap zoom** — zoom in at tap position with smooth animation ✅
+- [x] **Page lock when zoomed** — no accidental image swipes while panning ✅
+- [x] **9:16 aspect ratio** — portrait grid layout ✅
+- [x] **Pull to refresh** — manual refresh in local gallery ✅
+- [x] **404 filtering** — remote gallery hides missing/deleted images ✅
+- [ ] **iPad split view** — side-by-side generate and gallery panels
+- [ ] **Image tagging** — tag and filter generated images
+- [ ] **Favorites** — mark and filter favorite generations
+
+### ⚙️ Management
+- [ ] **Model manager** — browse and download models directly from the app
+- [ ] **LoRA browser** — preview and manage installed LoRAs
+- [ ] **ComfyUI workflow import** — load custom workflows from JSON files
 - [ ] **Connection profiles** — save multiple server configurations and switch quickly
 
 ### 🎨 Generation

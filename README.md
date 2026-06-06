@@ -2,24 +2,77 @@
 
 A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 
+![Home Screen](screenshots/home.png) ![Generate Screen](screenshots/generate_top.png) ![Generate Screen](screenshots/generate_bottom.png) ![Gallery Screen](screenshots/gallery.png)
+
+---
+
 ## Features
 
-- **Power Control** — Turn your PC on/off via Tuya smart plug
-- **PC Status** — Real-time monitoring (Offline → Booting → Online → ComfyUI Ready)
-- **ComfyUI Control** — Start ComfyUI remotely via SSH, view logs
-- **Image Generation** — Full generation screen with:
-  - 4 LoRA slots
-  - Sampler, scheduler, steps, CFG, denoise controls
-  - Resolution presets including RedMagic 10S Pro wallpaper sizes
-  - Upscale toggle (RealESRGAN x2 via UltimateSDUpscale)
-  - Batch generation (up to 50 images)
-- **Gallery** — Browse locally saved images and ComfyUI history
-  - Swipeable fullscreen viewer
-  - Multi-select delete
-  - Load generation settings from image metadata
-- **Settings persistence** — Settings saved to `Downloads/ComfyUI/settings.json`
-- **PNG metadata** — Workflow embedded in saved images for settings recovery
-- **Tablet layout** — Side navigation rail on iPad/large screens
+### 🔌 Power & Connectivity
+- Turn your PC on/off via **Tuya smart plug**
+- **Hard reset** (power cycle) for frozen PC
+- Real-time PC status monitoring (Offline → Booting → Online → ComfyUI Ready)
+- Remote **SSH control** — start ComfyUI, view logs, shutdown PC
+
+### 🎨 Image Generation
+- 4 LoRA slots with strength sliders
+- Sampler, scheduler, steps, CFG, denoise controls
+- Resolution presets including **RedMagic 10S Pro** wallpaper sizes
+- **Upscale toggle** (RealESRGAN x2 via UltimateSDUpscale)
+- Batch generation (up to 50 images)
+
+### 🖼️ Gallery
+- Browse locally saved images and ComfyUI history
+- Swipeable fullscreen viewer with **pinch & double-tap zoom**
+- Multi-select delete
+- Load generation settings from image PNG metadata
+
+### ⚙️ Settings & Persistence
+- Settings saved to `Downloads/ComfyUI/settings.json`
+- Workflow embedded in saved PNGs for settings recovery
+- Tablet layout with side navigation rail (iPad support)
+
+---
+
+## Screenshots
+
+| Home | Generate (top) | Generate (bottom) | Gallery |
+|------|---------------|------------------|---------|
+| ![Home](screenshots/home.png) | ![Generate top](screenshots/generate_top.png) | ![Generate bottom](screenshots/generate_bottom.png) | ![Gallery](screenshots/gallery.png) |
+
+---
+
+## Planned Features
+
+### 🔌 Networking
+- [ ] **Local ComfyUI detection** — auto-discover ComfyUI instances on the local network (current version requires Tailscale IP)
+- [ ] **Multi-instance selector** — detect multiple ComfyUI machines on the network and switch between them by name
+- [ ] **mDNS/Bonjour discovery** — zero-config connection without manually entering IP addresses
+- [ ] **Connection profiles** — save multiple server configurations and switch quickly
+
+### 🎨 Generation
+- [ ] **LoRA strength sliders** — individual strength bar under each LoRA selector in the UI
+- [ ] **Custom resolution input** — enter any width/height instead of fixed presets
+- [ ] **Image to video** — send generated images directly to Wan 2.2 I2V workflow
+- [ ] **Text to video** — T2V workflow support from the generate screen
+- [ ] **Prompt history** — save and reuse previous prompts
+- [ ] **Wildcard support** — random prompt variations
+- [ ] **Generation queue** — queue multiple different prompts and run them sequentially
+
+### 🔔 Notifications
+- [ ] **Push notifications** — notify when image generation is complete
+- [ ] **Background notifications** — status updates when app is minimized
+- [ ] **Generation progress** — live step counter during generation
+
+### 🖼️ Gallery
+- [ ] **iPad split view** — side-by-side generate and gallery panels
+- [ ] **Image tagging** — tag and filter generated images
+- [ ] **Favorites** — mark and filter favorite generations
+
+### ⚙️ Management
+- [ ] **Model manager** — browse and download models directly from the app
+- [ ] **LoRA browser** — preview and manage installed LoRAs
+- [ ] **ComfyUI workflow import** — load custom workflows from JSON files
 
 ---
 
@@ -38,8 +91,8 @@ A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 ### 1. Clone the repo
 
 ```bash
-git clone https://gitlab.com/yourname/comfy_remote.git
-cd comfy_remote
+git clone https://gitlab.com/Ithoroo/comfyui-mobile-remote.git
+cd comfyui-mobile-remote
 flutter pub get
 ```
 
@@ -72,7 +125,19 @@ The app uses SSH to:
 - View ComfyUI logs
 - Shutdown PC
 
-Make sure your PC allows password SSH. On Windows enable OpenSSH Server in Settings → Optional Features.
+On Windows enable OpenSSH Server in **Settings → Optional Features → OpenSSH Server**.
+
+### 5. iOS only — allow HTTP
+
+Add this to `ios/Runner/Info.plist`:
+
+```xml
+<key>NSAppTransportSecurity</key>
+<dict>
+    <key>NSAllowsArbitraryLoads</key>
+    <true/>
+</dict>
+```
 
 ---
 
@@ -83,7 +148,7 @@ Make sure your PC allows password SSH. On Windows enable OpenSSH Server in Setti
 ```bash
 flutter build apk --release
 ```
-APK will be at `build/app/outputs/flutter-apk/app-release.apk`
+APK at `build/app/outputs/flutter-apk/app-release.apk`
 
 ### iOS (requires Mac + Xcode)
 
@@ -91,7 +156,6 @@ APK will be at `build/app/outputs/flutter-apk/app-release.apk`
 flutter build ios
 open ios/Runner.xcworkspace
 ```
-Then deploy via Xcode to your device.
 
 ---
 
@@ -107,11 +171,11 @@ lib/
 │   └── settings_screen.dart    # App configuration
 └── services/
     ├── settings_service.dart   # SharedPreferences wrapper
-    ├── tuya_service.dart        # Tuya smart plug API
-    ├── ssh_service.dart         # SSH commands
-    ├── comfy_service.dart       # ComfyUI API + workflow builder
-    ├── generation_prefs.dart    # Generation settings persistence
-    └── png_metadata.dart        # PNG tEXt chunk reader/writer
+    ├── tuya_service.dart       # Tuya smart plug API
+    ├── ssh_service.dart        # SSH commands
+    ├── comfy_service.dart      # ComfyUI API + workflow builder
+    ├── generation_prefs.dart   # Generation settings persistence
+    └── png_metadata.dart       # PNG tEXt chunk reader/writer
 ```
 
 ---
@@ -119,23 +183,22 @@ lib/
 ## ComfyUI Workflow
 
 The app builds a clean API-format workflow supporting:
-- CheckpointLoaderSimple
-- Up to 4 chained LoraLoader nodes
-- CLIPTextEncode (positive + negative)
-- EmptyLatentImage
-- KSampler (with denoise)
-- VAEDecode
-- SaveImage
-- Optional UltimateSDUpscale with RealESRGAN_x2
+- `CheckpointLoaderSimple`
+- Up to 4 chained `LoraLoader` nodes
+- `CLIPTextEncode` (positive + negative)
+- `EmptyLatentImage`
+- `KSampler` (with denoise)
+- `VAEDecode`
+- `SaveImage`
+- Optional `UltimateSDUpscale` with RealESRGAN_x2
 
 ---
 
 ## Notes
 
-- Images are saved to `Downloads/ComfyUI/` on the device with embedded workflow metadata
-- Settings can be loaded from any generated image via Gallery → fullscreen → tune icon
-- The app uses HTTP (not HTTPS) to connect to ComfyUI — make sure your network allows this
-- On iOS add `NSAppTransportSecurity` to `Info.plist` to allow HTTP connections
+- Images saved to `Downloads/ComfyUI/` with embedded workflow metadata
+- Settings loaded from any generated image via Gallery → fullscreen → tune icon
+- Tested on **RedMagic 10S Pro** (Android 16) and **iPad**
 
 ---
 

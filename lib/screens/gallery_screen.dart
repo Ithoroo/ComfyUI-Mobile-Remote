@@ -249,6 +249,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
         crossAxisCount: MediaQuery.of(context).size.shortestSide >= 600 ? 5 : 3,
         crossAxisSpacing: 4,
         mainAxisSpacing: 4,
+        childAspectRatio: 9 / 16,
       ),
       itemCount: _localImages.length,
       itemBuilder: (ctx, i) {
@@ -300,6 +301,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
         crossAxisCount: MediaQuery.of(context).size.shortestSide >= 600 ? 5 : 3,
         crossAxisSpacing: 4,
         mainAxisSpacing: 4,
+        childAspectRatio: 9 / 16,
       ),
       itemCount: _remoteImages.length,
       itemBuilder: (ctx, i) {
@@ -344,6 +346,7 @@ class _LocalFullscreenGalleryState extends State<_LocalFullscreenGallery> {
   late PageController _pageController;
   late int _current;
   bool _loadingSettings = false;
+  bool _isZoomed = false;
 
   @override
   void initState() {
@@ -430,11 +433,11 @@ class _LocalFullscreenGalleryState extends State<_LocalFullscreenGallery> {
       body: PageView.builder(
         controller: _pageController,
         itemCount: widget.files.length,
+        physics: _isZoomed ? const NeverScrollableScrollPhysics() : const PageScrollPhysics(),
         onPageChanged: (i) => setState(() => _current = i),
-        itemBuilder: (ctx, i) => InteractiveViewer(
-          child: Center(
-            child: Image.file(widget.files[i], fit: BoxFit.contain),
-          ),
+        itemBuilder: (ctx, i) => _ZoomableImage(
+          onZoomChanged: (zoomed) => setState(() => _isZoomed = zoomed),
+          child: Image.file(widget.files[i], fit: BoxFit.contain),
         ),
       ),
     );
@@ -461,6 +464,7 @@ class _RemoteFullscreenGallery extends StatefulWidget {
 class _RemoteFullscreenGalleryState extends State<_RemoteFullscreenGallery> {
   late PageController _pageController;
   late int _current;
+  bool _isZoomed = false;
 
   @override
   void initState() {
@@ -496,18 +500,98 @@ class _RemoteFullscreenGalleryState extends State<_RemoteFullscreenGallery> {
       body: PageView.builder(
         controller: _pageController,
         itemCount: widget.images.length,
+        physics: _isZoomed ? const NeverScrollableScrollPhysics() : const PageScrollPhysics(),
         onPageChanged: (i) => setState(() => _current = i),
-        itemBuilder: (ctx, i) => InteractiveViewer(
-          child: Center(
-            child: Image.network(
-              widget.images[i]['url'] as String,
-              fit: BoxFit.contain,
-              loadingBuilder: (ctx, child, progress) =>
-                  progress == null ? child
-                      : const Center(child: CircularProgressIndicator()),
-            ),
+        itemBuilder: (ctx, i) => _ZoomableImage(
+          onZoomChanged: (zoomed) => setState(() => _isZoomed = zoomed),
+          child: Image.network(
+            widget.images[i]['url'] as String,
+            fit: BoxFit.contain,
+            loadingBuilder: (ctx, child, progress) =>
+                progress == null ? child
+                    : const Center(child: CircularProgressIndicator()),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Double-tap to zoom widget ──────────────────────────────────────────────
+
+class _ZoomableImage extends StatefulWidget {
+  final Widget child;
+  final void Function(bool zoomed)? onZoomChanged;
+  const _ZoomableImage({required this.child, this.onZoomChanged});
+
+  @override
+  State<_ZoomableImage> createState() => _ZoomableImageState();
+}
+
+class _ZoomableImageState extends State<_ZoomableImage>
+    with SingleTickerProviderStateMixin {
+  final _transformController = TransformationController();
+  late AnimationController _animController;
+  Animation<Matrix4>? _animation;
+  bool _isZoomed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    )..addListener(() {
+        _transformController.value = _animation!.value;
+      });
+    _transformController.addListener(() {
+      final zoomed = _transformController.value != Matrix4.identity();
+      if (zoomed != _isZoomed) {
+        setState(() => _isZoomed = zoomed);
+        widget.onZoomChanged?.call(zoomed);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _transformController.dispose();
+    _animController.dispose();
+    super.dispose();
+  }
+
+  void _onDoubleTap(TapDownDetails details) {
+    if (_isZoomed) {
+      _animation = Matrix4Tween(
+        begin: _transformController.value,
+        end: Matrix4.identity(),
+      ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
+    } else {
+      final pos = details.localPosition;
+      final zoomed = Matrix4.identity()
+        ..translate(-pos.dx * 1.5, -pos.dy * 1.5)
+        ..scale(2.5);
+      _animation = Matrix4Tween(
+        begin: _transformController.value,
+        end: zoomed,
+      ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
+    }
+    _animController.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onDoubleTapDown: _onDoubleTap,
+      onDoubleTap: () {},
+      child: InteractiveViewer(
+        transformationController: _transformController,
+        minScale: 0.5,
+        maxScale: 5.0,
+        // When zoomed in, intercept pan gestures so PageView doesn't steal them
+        panEnabled: true,
+        scaleEnabled: true,
+        child: Center(child: widget.child),
       ),
     );
   }

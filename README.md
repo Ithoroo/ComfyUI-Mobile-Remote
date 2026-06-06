@@ -2,7 +2,7 @@
 
 A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 
-![Home Screen](screenshots/home.png) ![Generate Screen](screenshots/generate_top.png) ![Generate Screen](screenshots/generate_bottom.png) ![Gallery Screen](screenshots/gallery.png)
+![Home Screen](screenshots/home.jpg) ![Generate Screen](screenshots/generate_top.jpg) ![Generate Screen](screenshots/generate_bottom.jpg) ![Gallery Screen](screenshots/gallery.jpg)
 
 ---
 

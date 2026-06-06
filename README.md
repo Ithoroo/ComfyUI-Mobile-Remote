@@ -38,7 +38,7 @@ A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 
 | Home | Generate (top) | Generate (bottom) | Gallery |
 |------|---------------|------------------|---------|
-| ![Home](screenshots/home.png) | ![Generate top](screenshots/generate_top.png) | ![Generate bottom](screenshots/generate_bottom.png) | ![Gallery](screenshots/gallery.png) |
+| ![Home](screenshots/home.jpg) | ![Generate top](screenshots/generate_top.jpg) | ![Generate bottom](screenshots/generate_bottom.jpg) | ![Gallery](screenshots/gallery.jpg) |
 
 ---
 

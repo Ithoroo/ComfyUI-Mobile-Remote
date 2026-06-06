@@ -58,10 +58,11 @@ class ComfyService {
 
   // ── Poll for result ───────────────────────────────────────────────────────
 
-  /// Polls history until the prompt is done. Returns output image filenames.
-  Future<List<String>> waitForResult(String promptId,
+  /// Polls history until the prompt is done.
+  /// Returns map with 'regular' and 'upscaled' image filenames.
+  Future<Map<String, String?>> waitForResultMap(String promptId,
       {Duration interval = const Duration(seconds: 2),
-      int maxAttempts = 120}) async {
+      int maxAttempts = 300}) async {
     for (var i = 0; i < maxAttempts; i++) {
       await Future.delayed(interval);
       final res = await http.get(Uri.parse('$baseUrl/history/$promptId'));
@@ -69,19 +70,38 @@ class ComfyService {
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       if (!data.containsKey(promptId)) continue;
       final outputs = data[promptId]['outputs'] as Map<String, dynamic>;
-      final images = <String>[];
+      String? regular;
+      String? upscaled;
       for (final node in outputs.values) {
         if (node['images'] != null) {
           for (final img in node['images']) {
             if (img['type'] == 'output') {
-              images.add(img['filename'] as String);
+              final fname = img['filename'] as String;
+              if (fname.startsWith('mobile_upscaled')) {
+                upscaled = fname;
+              } else {
+                regular = fname;
+              }
             }
           }
         }
       }
-      if (images.isNotEmpty) return images;
+      if (regular != null || upscaled != null) {
+        return {'regular': regular, 'upscaled': upscaled};
+      }
     }
     throw Exception('Generation timed out');
+  }
+
+  /// Polls history until the prompt is done. Returns output image filenames.
+  Future<List<String>> waitForResult(String promptId,
+      {Duration interval = const Duration(seconds: 2),
+      int maxAttempts = 300}) async {
+    final result = await waitForResultMap(promptId, interval: interval, maxAttempts: maxAttempts);
+    return [
+      if (result['regular'] != null) result['regular']!,
+      if (result['upscaled'] != null) result['upscaled']!,
+    ];
   }
 
   /// Fetch image bytes from ComfyUI output folder.

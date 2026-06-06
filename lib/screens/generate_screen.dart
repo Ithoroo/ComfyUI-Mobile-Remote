@@ -243,8 +243,12 @@ class _GenerateScreenState extends State<GenerateScreen> {
         final promptId = await _comfy.queuePrompt(workflow);
         setState(() => _status = 'Image ${i + 1}/$_batchCount — generating...');
 
-        final images = await _comfy.waitForResult(promptId);
-        final imageBytes = await _comfy.getImage(images.first);
+        final result = await _comfy.waitForResultMap(promptId);
+        // Use upscaled if available, otherwise regular
+        final targetFile = result['upscaled'] ?? result['regular'];
+        if (targetFile == null) throw Exception('No output image found');
+        final imageBytes = await _comfy.getImage(targetFile);
+        debugPrint('[Generate] got image: $targetFile (upscaled: ${result['upscaled'] != null})');
 
         setState(() {
           _resultImages.add(imageBytes);
@@ -505,6 +509,19 @@ class _GenerateScreenState extends State<GenerateScreen> {
             ]),
             const SizedBox(height: 16),
 
+            // ── Upscale ────────────────────────────────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const _SectionLabel('Upscale x2 (RealESRGAN)'),
+                Switch(
+                  value: _useUpscale,
+                  onChanged: (v) => setState(() => _useUpscale = v),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
             // ── Batch count ────────────────────────────────────────────────
             _SectionLabel('Batch: $_batchCount image${_batchCount > 1 ? "s" : ""}'),
             Slider(
@@ -674,9 +691,16 @@ class _FullscreenViewerState extends State<_FullscreenViewer> {
         controller: _pageController,
         itemCount: widget.images.length,
         onPageChanged: (i) => setState(() => _current = i),
-        itemBuilder: (ctx, i) => InteractiveViewer(
-          child: Center(
-            child: Image.memory(widget.images[i], fit: BoxFit.contain),
+        itemBuilder: (ctx, i) => GestureDetector(
+          onDoubleTap: () {
+            // handled by InteractiveViewer reset on double tap
+          },
+          child: InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 5.0,
+            child: Center(
+              child: Image.memory(widget.images[i], fit: BoxFit.contain),
+            ),
           ),
         ),
       ),

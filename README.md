@@ -111,7 +111,7 @@ A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/Ithoroo/comfyui-mobile-remote.git
+git clone https://github.com/truszcz/ComfyUI-Mobile-Remote.git
 cd comfyui-mobile-remote
 flutter pub get
 ```

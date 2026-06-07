@@ -21,8 +21,8 @@ A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 ## Features
 
 ### 🔌 Power & Connectivity
-- Turn your PC on/off via **Tuya smart plug**
-- **Hard reset** (power cycle) for frozen PC
+- Turn your PC on/off via **Tuya smart plug** (optional)
+- **Hard reset** (power cycle) for frozen PC (requires Tuya)
 - Real-time PC status monitoring (Offline → Booting → Online → ComfyUI Ready)
 - Remote **SSH control** — start ComfyUI, view logs, shutdown PC
 - **Windows & Linux server support** — toggle between OS in settings
@@ -127,8 +127,8 @@ A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 - Flutter 3.x+
 - Android 10+ or iOS 16+
 - ComfyUI running on a Windows or Linux machine accessible via Tailscale or local network
-- Tuya smart plug (EU region) for power control
 - SSH access to the server
+- Tuya smart plug (optional) — required only for remote power on/off and hard reset
 
 ---
 
@@ -153,9 +153,9 @@ Open the app and go to **Settings** (gear icon), fill in:
 | SSH Host | Tailscale IP of your server |
 | SSH User | Your username |
 | SSH Password | Your password |
-| Tuya Client ID | From Tuya IoT Platform |
-| Tuya Client Secret | From Tuya IoT Platform |
-| Tuya Device ID | Your smart plug device ID |
+| Tuya Client ID | Optional — from Tuya IoT Platform |
+| Tuya Client Secret | Optional — from Tuya IoT Platform |
+| Tuya Device ID | Optional — your smart plug device ID |
 
 ### 3. Tuya setup
 

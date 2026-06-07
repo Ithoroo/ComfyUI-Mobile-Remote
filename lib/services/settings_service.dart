@@ -36,7 +36,25 @@ class SettingsService {
   Future<void> setSshUsername(String v) => _prefs.setString('ssh_username', v);
   Future<void> setSshPassword(String v) => _prefs.setString('ssh_password', v);
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  // ── Server OS ─────────────────────────────────────────────────────────────
+  String get serverOs => _prefs.getString('server_os') ?? 'windows';
+  Future<void> setServerOs(String v) => _prefs.setString('server_os', v);
+  bool get isWindows => serverOs == 'windows';
+  bool get isLinux   => serverOs == 'linux';
+
+  // ── Windows specific ──────────────────────────────────────────────────────
+  String get windowsComfyPath    => _prefs.getString('windows_comfy_path') ?? '';
+  bool   get windowsCustomPath   => windowsComfyPath.isNotEmpty;
+  Future<void> setWindowsComfyPath(String v) => _prefs.setString('windows_comfy_path', v);
+  String get linuxComfyPath  => _prefs.getString('linux_comfy_path')  ?? '~/ComfyUI';
+  String get linuxPythonCmd  => _prefs.getString('linux_python_cmd')  ?? 'python';
+  String get linuxGpu        => _prefs.getString('linux_gpu')         ?? 'nvidia';
+  Future<void> setLinuxComfyPath(String v) => _prefs.setString('linux_comfy_path', v);
+  Future<void> setLinuxPythonCmd(String v) => _prefs.setString('linux_python_cmd', v);
+  Future<void> setLinuxGpu(String v)       => _prefs.setString('linux_gpu', v);
+  bool get isNvidia => linuxGpu == 'nvidia';
+  bool get isAmd    => linuxGpu == 'amd';
+  bool get isCpu    => linuxGpu == 'cpu';
   /// True when the minimum required fields are filled in.
   bool get isConfigured =>
       tuyaClientId.isNotEmpty &&

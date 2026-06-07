@@ -63,10 +63,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     _ssh = SshService(
-      host:     _settings.sshHost,
-      port:     _settings.sshPort,
-      username: _settings.sshUsername,
-      password: _settings.sshPassword,
+      host:             _settings.sshHost,
+      port:             _settings.sshPort,
+      username:         _settings.sshUsername,
+      password:         _settings.sshPassword,
+      isWindows:        _settings.isWindows,
+      linuxComfyPath:   _settings.linuxComfyPath,
+      linuxPythonCmd:   _settings.linuxPythonCmd,
+      linuxGpu:         _settings.linuxGpu,
+      windowsComfyPath: _settings.windowsComfyPath,
     );
   }
 

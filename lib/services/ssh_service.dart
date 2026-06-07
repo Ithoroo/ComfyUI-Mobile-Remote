@@ -6,15 +6,29 @@ class SshService {
   final int port;
   final String username;
   final String password;
+  final bool isWindows;
+  final String linuxComfyPath;
+  final String linuxPythonCmd;
+  final String linuxGpu;
+  final String windowsComfyPath; // empty = use default
 
-  static const _logPath = r'C:\Users\trusz\comfyui.log';
-  static const _comfyExe = r'C:\Users\trusz\AppData\Local\Programs\ComfyUI\ComfyUI.exe';
+  // Windows paths (use PowerShell env vars)
+  static const _winLogPath  = r'$env:USERPROFILE\comfyui.log';
+  static const _winComfyExe = r'$env:LOCALAPPDATA\Programs\ComfyUI\ComfyUI.exe';
+
+  // Linux log path
+  static const _linuxLogPath = '~/comfyui.log';
 
   SshService({
     required this.host,
     required this.port,
     required this.username,
     required this.password,
+    this.isWindows = true,
+    this.linuxComfyPath = '~/ComfyUI',
+    this.linuxPythonCmd = 'python',
+    this.linuxGpu = 'nvidia',
+    this.windowsComfyPath = '',
   });
 
   Future<SSHClient> _connect() async {
@@ -56,15 +70,26 @@ class SshService {
     }
   }
 
-  /// Launch ComfyUI via WMI with log capture.
-  /// WMI creates the process outside the SSH session tree so it
-  /// survives when the SSH connection closes.
+  /// Launch ComfyUI — works on Windows (WMI) and Linux (nohup).
   Future<bool> startComfy() async {
     try {
       final client = await _connect();
-      final session = await client.execute(
-        'powershell -Command "\$wmi = [wmiclass]\'Win32_Process\'; \$wmi.Create(\'cmd.exe /c \\\"$_comfyExe\\\" > $_logPath 2>&1\')"',
-      );
+      final gpuArgs = linuxGpu == 'amd'
+          ? 'HSA_OVERRIDE_GFX_VERSION=11.0.0 '
+          : linuxGpu == 'cpu' ? '' : '';
+      final extraArgs = linuxGpu == 'cpu' ? ' --cpu' : '';
+      // Use custom path if set, otherwise default AppData location
+      final comfyExe = windowsComfyPath.isNotEmpty
+          ? windowsComfyPath
+          : 'C:\\Users\\$username\\AppData\\Local\\Programs\\ComfyUI\\ComfyUI.exe';
+      final logPath  = isWindows
+          ? 'C:\\Users\\$username\\comfyui.log'
+          : _linuxLogPath;
+      final cmd = isWindows
+          ? 'powershell -Command "\$wmi = [wmiclass]\'Win32_Process\'; \$wmi.Create(\'cmd.exe /c \\\"$comfyExe\\\" > $logPath 2>&1\')"'
+          : 'nohup bash -c "cd $linuxComfyPath && ${gpuArgs}$linuxPythonCmd main.py --listen 0.0.0.0$extraArgs" > $_linuxLogPath 2>&1 &';
+      print('[SSH] startComfy cmd: $cmd');
+      final session = await client.execute(cmd);
       await session.stdout.drain();
       await session.stderr.drain();
       await session.done;
@@ -72,7 +97,6 @@ class SshService {
       await client.done;
       return true;
     } catch (e) {
-      // ignore: avoid_print
       print('[SSH] startComfy error: $e');
       return false;
     }
@@ -82,9 +106,13 @@ class SshService {
   Future<String> readLogs({int lines = 50}) async {
     try {
       final client = await _connect();
-      final session = await client.execute(
-        'powershell -Command "Get-Content \'$_logPath\' -Tail $lines"',
-      );
+      final logPath = isWindows
+          ? 'C:\\Users\\$username\\comfyui.log'
+          : _linuxLogPath;
+      final cmd = isWindows
+          ? 'powershell -Command "Get-Content \'$logPath\' -Tail $lines"'
+          : 'tail -n $lines $_linuxLogPath';
+      final session = await client.execute(cmd);
       final output = await session.stdout
           .map((bytes) => String.fromCharCodes(bytes))
           .join();
@@ -101,9 +129,10 @@ class SshService {
   Future<bool> killComfy() async {
     try {
       final client = await _connect();
-      final session = await client.execute(
-        'taskkill /F /IM ComfyUI.exe /T',
-      );
+      final cmd = isWindows
+          ? 'taskkill /F /IM ComfyUI.exe /T'
+          : 'pkill -f "python main.py"';
+      final session = await client.execute(cmd);
       await session.stdout.drain();
       await session.done;
       client.close();
@@ -116,7 +145,8 @@ class SshService {
 
   Future<void> shutdownPC() async {
     final client = await _connect();
-    final session = await client.execute('shutdown /s /t 0');
+    final cmd = isWindows ? 'shutdown /s /t 0' : 'sudo shutdown -h now';
+    final session = await client.execute(cmd);
     await session.done;
     client.close();
     await client.done;

@@ -4,6 +4,20 @@ A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 
 ---
 
+## Table of Contents
+- [Features](#features)
+- [Notes](#notes)
+- [Screenshots](#screenshots)
+- [Planned Features](#planned-features)
+- [Requirements](#requirements)
+- [Setup](#setup)
+- [Building](#building)
+- [Project Structure](#project-structure)
+- [ComfyUI Workflow](#comfyui-workflow)
+- [License](#license)
+
+---
+
 ## Features
 
 ### 🔌 Power & Connectivity
@@ -37,9 +51,21 @@ A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 - Remote gallery filters out deleted/missing images automatically
 
 ### ⚙️ Settings & Persistence
-- Settings saved to `Downloads/ComfyUI/settings.json`
+- Generation settings saved to **phone's** `Downloads/ComfyUI/settings.json`
 - Workflow embedded in saved PNGs for settings recovery
 - Tablet layout with side navigation rail (iPad support)
+
+---
+
+## Notes
+
+- Generated images are saved to **phone's** `Downloads/ComfyUI/` folder with embedded workflow metadata
+- Generation settings can be restored from any saved image via Gallery → fullscreen → tune icon
+- The app connects to ComfyUI running on your **PC/server** — it does not run ComfyUI locally on the phone
+- ComfyUI history tab shows images stored on the **PC's** output folder — local tab shows images saved on the **phone**
+- Tested on **RedMagic 10S Pro** (Android 16) and **OnePlus Ace 3** (Android 14)
+- ⚠️ **iOS/iPadOS** — code is implemented but not yet tested on a real device
+- ⚠️ **Linux server support** — implemented but not yet tested, feedback welcome
 
 ---
 
@@ -112,7 +138,7 @@ A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 
 ```bash
 git clone https://github.com/truszcz/ComfyUI-Mobile-Remote.git
-cd comfyui-mobile-remote
+cd ComfyUI-Mobile-Remote
 flutter pub get
 ```
 
@@ -215,15 +241,6 @@ The app builds a clean API-format workflow supporting:
 
 ---
 
-## Notes
-
-- Images saved to `Downloads/ComfyUI/` with embedded workflow metadata
-- Settings loaded from any generated image via Gallery → fullscreen → tune icon
-- Tested on **RedMagic 10S Pro** (Android 16) and **OnePlus Ace 3** (Android 14)
-- ⚠️ **iOS/iPadOS** — code is implemented but not yet tested on a real device
-- ⚠️ **Linux server support** — implemented but not yet tested, feedback welcome
-
----
 
 ## License
 

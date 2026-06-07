@@ -11,6 +11,9 @@ A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 - **Hard reset** (power cycle) for frozen PC
 - Real-time PC status monitoring (Offline → Booting → Online → ComfyUI Ready)
 - Remote **SSH control** — start ComfyUI, view logs, shutdown PC
+- **Windows & Linux server support** — toggle between OS in settings
+- **GPU selector for Linux** — NVIDIA, AMD (ROCm) or CPU
+- **Custom ComfyUI path** — use default or set a custom installation path
 
 ### 🎨 Image Generation
 - 4 LoRA slots with strength sliders
@@ -51,9 +54,12 @@ A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 ## Planned Features
 
 ### 🔌 Networking
-- [ ] **Local ComfyUI detection** — auto-discover ComfyUI instances on the local network (current version requires Tailscale IP)
-- [ ] **Multi-instance selector** — detect multiple ComfyUI machines on the network and switch between them by name
-- [ ] **mDNS/Bonjour discovery** — zero-config connection without manually entering IP addresses
+- [x] **Windows & Linux server support** — toggle between OS in settings ✅
+- [x] **GPU selector for Linux** — NVIDIA, AMD (ROCm), CPU ✅
+- [x] **Custom ComfyUI path** — default or custom installation path ✅
+- [ ] **Local ComfyUI detection** — auto-discover ComfyUI instances on the local network
+- [ ] **Multi-instance selector** — detect multiple ComfyUI machines and switch by name
+- [ ] **mDNS/Bonjour discovery** — zero-config connection without manually entering IP
 - [ ] **Connection profiles** — save multiple server configurations and switch quickly
 
 ### 🎨 Generation
@@ -91,19 +97,28 @@ A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 
 ### 🎨 Generation
 - [ ] **LoRA strength sliders** — individual strength bar under each LoRA selector in the UI
-- [ ] **Custom resolution input** — enter any width/height instead of fixed presets
+- [x] **Generation queue** — queue multiple jobs, processed sequentially ✅
+- [x] **Settings snapshot** — settings locked at generation time ✅
+- [x] **Custom resolution input** — enter any width/height instead of fixed presets ✅
+- [x] **Upscale toggle** — RealESRGAN x2 toggle visible in UI ✅
+- [ ] **LoRA strength sliders** — individual strength bar under each LoRA selector
 - [ ] **Image to video** — send generated images directly to Wan 2.2 I2V workflow
 - [ ] **Text to video** — T2V workflow support from the generate screen
 - [ ] **Prompt history** — save and reuse previous prompts
 - [ ] **Wildcard support** — random prompt variations
-- [ ] **Generation queue** — queue multiple different prompts and run them sequentially
 
 ### 🔔 Notifications
-- [ ] **Push notifications** — notify when image generation is complete
-- [ ] **Background notifications** — status updates when app is minimized
+- [x] **Background notifications** — foreground service shows generation progress ✅
+- [x] **Battery optimization exemption** — Android won't kill the app ✅
+- [ ] **Push notifications** — notify when generation is complete (even when app is closed)
 - [ ] **Generation progress** — live step counter during generation
 
 ### 🖼️ Gallery
+- [x] **Double-tap zoom** — zoom in at tap position with smooth animation ✅
+- [x] **Page lock when zoomed** — no accidental image swipes while panning ✅
+- [x] **9:16 aspect ratio** — portrait grid layout ✅
+- [x] **Pull to refresh** — manual refresh in local gallery ✅
+- [x] **404 filtering** — remote gallery hides missing/deleted images ✅
 - [ ] **iPad split view** — side-by-side generate and gallery panels
 - [ ] **Image tagging** — tag and filter generated images
 - [ ] **Favorites** — mark and filter favorite generations
@@ -119,9 +134,9 @@ A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 
 - Flutter 3.x+
 - Android 10+ or iOS 16+
-- ComfyUI running on a PC accessible via Tailscale or local network
+- ComfyUI running on a Windows or Linux machine accessible via Tailscale or local network
 - Tuya smart plug (EU region) for power control
-- SSH access to the PC
+- SSH access to the server
 
 ---
 
@@ -130,7 +145,7 @@ A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 ### 1. Clone the repo
 
 ```bash
-git clone https://gitlab.com/Ithoroo/comfyui-mobile-remote.git
+git clone https://github.com/Ithoroo/comfyui-mobile-remote.git
 cd comfyui-mobile-remote
 flutter pub get
 ```
@@ -142,9 +157,10 @@ Open the app and go to **Settings** (gear icon), fill in:
 | Setting | Description |
 |---|---|
 | ComfyUI URL | e.g. `http://100.82.84.36:8000` |
-| SSH Host | Tailscale IP of your PC |
-| SSH User | Your Windows username |
-| SSH Password | Your Windows password |
+| Server OS | Windows or Linux |
+| SSH Host | Tailscale IP of your server |
+| SSH User | Your username |
+| SSH Password | Your password |
 | Tuya Client ID | From Tuya IoT Platform |
 | Tuya Client Secret | From Tuya IoT Platform |
 | Tuya Device ID | Your smart plug device ID |
@@ -237,7 +253,9 @@ The app builds a clean API-format workflow supporting:
 
 - Images saved to `Downloads/ComfyUI/` with embedded workflow metadata
 - Settings loaded from any generated image via Gallery → fullscreen → tune icon
-- Tested on **RedMagic 10S Pro** (Android 16) and **iPad**
+- Tested on **RedMagic 10S Pro** (Android 16) and **OnePlus Ace 3** (Android 14)
+- ⚠️ **iOS/iPadOS** — code is implemented but not yet tested on a real device
+- ⚠️ **Linux server support** — implemented but not yet tested, feedback welcome
 
 ---
 

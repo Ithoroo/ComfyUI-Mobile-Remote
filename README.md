@@ -54,71 +54,37 @@ A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 ## Planned Features
 
 ### 🔌 Networking
-- ✅ **Windows & Linux server support** — toggle between OS in settings ✅
-- ✅ **GPU selector for Linux** — NVIDIA, AMD (ROCm), CPU ✅
-- ✅ **Custom ComfyUI path** — default or custom installation path ✅
+- ✅ **Windows & Linux server support** — toggle between OS in settings
+- ✅ **GPU selector for Linux** — NVIDIA, AMD (ROCm), CPU
+- ✅ **Custom ComfyUI path** — default or custom installation path
 - 🔲 **Local ComfyUI detection** — auto-discover ComfyUI instances on the local network
 - 🔲 **Multi-instance selector** — detect multiple ComfyUI machines and switch by name
 - 🔲 **mDNS/Bonjour discovery** — zero-config connection without manually entering IP
 - 🔲 **Connection profiles** — save multiple server configurations and switch quickly
 
 ### 🎨 Generation
-- ✅ **Generation queue** — queue multiple jobs, processed sequentially ✅
-- ✅ **Settings snapshot** — settings locked at generation time, UI changes don't affect running jobs ✅
-- ✅ **Custom resolution input** — enter any width/height instead of fixed presets ✅
-- ✅ **Upscale toggle** — RealESRGAN x2 toggle visible in UI ✅
-- 🔲 **LoRA strength sliders** — individual strength bar under each LoRA selector in the UI
+- ✅ **Generation queue** — queue multiple jobs, processed sequentially
+- ✅ **Settings snapshot** — settings locked at generation time
+- ✅ **Custom resolution input** — enter any width/height instead of fixed presets
+- ✅ **Upscale toggle** — RealESRGAN x2 toggle visible in UI
+- ✅ **LoRA strength sliders** — individual strength bar under each LoRA selector
 - 🔲 **Image to video** — send generated images directly to Wan 2.2 I2V workflow
 - 🔲 **Text to video** — T2V workflow support from the generate screen
 - 🔲 **Prompt history** — save and reuse previous prompts
 - 🔲 **Wildcard support** — random prompt variations
 
 ### 🔔 Notifications
-- ✅ **Background notifications** — foreground service shows generation progress when app is minimized ✅
-- ✅ **Battery optimization exemption** — Android won't kill the app during long batches ✅
+- ✅ **Background notifications** — foreground service shows generation progress
+- ✅ **Battery optimization exemption** — Android won't kill the app during long batches
 - 🔲 **Push notifications** — notify when generation is complete (even when app is closed)
 - 🔲 **Generation progress** — live step counter during generation
 
 ### 🖼️ Gallery
-- ✅ **Double-tap zoom** — zoom in at tap position with smooth animation ✅
-- ✅ **Page lock when zoomed** — no accidental image swipes while panning ✅
-- ✅ **9:16 aspect ratio** — portrait grid layout ✅
-- ✅ **Pull to refresh** — manual refresh in local gallery ✅
-- ✅ **404 filtering** — remote gallery hides missing/deleted images ✅
-- 🔲 **iPad split view** — side-by-side generate and gallery panels
-- 🔲 **Image tagging** — tag and filter generated images
-- 🔲 **Favorites** — mark and filter favorite generations
-
-### ⚙️ Management
-- 🔲 **Model manager** — browse and download models directly from the app
-- 🔲 **LoRA browser** — preview and manage installed LoRAs
-- 🔲 **ComfyUI workflow import** — load custom workflows from JSON files
-- 🔲 **Connection profiles** — save multiple server configurations and switch quickly
-
-### 🎨 Generation
-- 🔲 **LoRA strength sliders** — individual strength bar under each LoRA selector in the UI
-- ✅ **Generation queue** — queue multiple jobs, processed sequentially ✅
-- ✅ **Settings snapshot** — settings locked at generation time ✅
-- ✅ **Custom resolution input** — enter any width/height instead of fixed presets ✅
-- ✅ **Upscale toggle** — RealESRGAN x2 toggle visible in UI ✅
-- 🔲 **LoRA strength sliders** — individual strength bar under each LoRA selector
-- 🔲 **Image to video** — send generated images directly to Wan 2.2 I2V workflow
-- 🔲 **Text to video** — T2V workflow support from the generate screen
-- 🔲 **Prompt history** — save and reuse previous prompts
-- 🔲 **Wildcard support** — random prompt variations
-
-### 🔔 Notifications
-- ✅ **Background notifications** — foreground service shows generation progress ✅
-- ✅ **Battery optimization exemption** — Android won't kill the app ✅
-- 🔲 **Push notifications** — notify when generation is complete (even when app is closed)
-- 🔲 **Generation progress** — live step counter during generation
-
-### 🖼️ Gallery
-- ✅ **Double-tap zoom** — zoom in at tap position with smooth animation ✅
-- ✅ **Page lock when zoomed** — no accidental image swipes while panning ✅
-- ✅ **9:16 aspect ratio** — portrait grid layout ✅
-- ✅ **Pull to refresh** — manual refresh in local gallery ✅
-- ✅ **404 filtering** — remote gallery hides missing/deleted images ✅
+- ✅ **Double-tap zoom** — zoom in at tap position with smooth animation
+- ✅ **Page lock when zoomed** — no accidental image swipes while panning
+- ✅ **9:16 aspect ratio** — portrait grid layout
+- ✅ **Pull to refresh** — manual refresh in local gallery
+- ✅ **404 filtering** — remote gallery hides missing/deleted images
 - 🔲 **iPad split view** — side-by-side generate and gallery panels
 - 🔲 **Image tagging** — tag and filter generated images
 - 🔲 **Favorites** — mark and filter favorite generations

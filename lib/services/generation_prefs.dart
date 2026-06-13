@@ -6,6 +6,10 @@ import 'dart:io';
 class GenerationPrefs {
   static const _path = '/storage/emulated/0/Download/ComfyUI/settings.json';
 
+  /// In-memory handoff for settings loaded from an image — survives the
+  /// widget rebuild timing that a file round-trip or constructor arg can miss.
+  static Map<String, dynamic>? pending;
+
   static Future<Map<String, dynamic>> load() async {
     try {
       final file = File(_path);
@@ -14,7 +18,6 @@ class GenerationPrefs {
       if (content.trim().isEmpty) return {};
       return jsonDecode(content) as Map<String, dynamic>;
     } catch (_) {
-      // Delete corrupted file so it doesn't keep failing
       try { await File(_path).delete(); } catch (_) {}
       return {};
     }

@@ -28,7 +28,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _winComfyPath;
 
   String _selectedRegion = 'https://openapi.tuyaeu.com';
-  bool _winCustomPath = false;
+  bool _winCustomPath  = false;
+  bool _tuyaEnabled    = false;
+  bool _sshEnabled     = false;
+  bool _autoDiscovery  = false;
+  String _scanMode     = 'fast';
   bool _sshPasswordVisible = false;
   bool _testingSSH = false;
 
@@ -57,6 +61,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _winComfyPath     = TextEditingController(text: _settings.windowsComfyPath);
     _selectedRegion   = _settings.tuyaBaseUrl;
     _winCustomPath    = _settings.windowsCustomPath;
+    _tuyaEnabled      = _settings.isTuyaConfigured;
+    _sshEnabled       = _settings.isSshConfigured;
+    _autoDiscovery    = _settings.autoDiscovery;
+    _scanMode         = _settings.scanMode;
   }
 
   @override
@@ -70,15 +78,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _save() async {
-    await _settings.setTuyaClientId(_tuyaClientId.text.trim());
-    await _settings.setTuyaClientSecret(_tuyaClientSecret.text.trim());
-    await _settings.setTuyaDeviceId(_tuyaDeviceId.text.trim());
+    await _settings.setTuyaClientId(_tuyaEnabled ? _tuyaClientId.text.trim() : '');
+    await _settings.setTuyaClientSecret(_tuyaEnabled ? _tuyaClientSecret.text.trim() : '');
+    await _settings.setTuyaDeviceId(_tuyaEnabled ? _tuyaDeviceId.text.trim() : '');
     await _settings.setTuyaBaseUrl(_selectedRegion);
-    await _settings.setComfyUrl(_comfyUrl.text.trim());
-    await _settings.setSshHost(_sshHost.text.trim());
+    await _settings.setComfyUrl(_autoDiscovery ? '' : _comfyUrl.text.trim());
+    await _settings.setAutoDiscovery(_autoDiscovery);
+    await _settings.setScanMode(_scanMode);
+    await _settings.setSshHost(_sshEnabled ? _sshHost.text.trim() : '');
     await _settings.setSshPort(int.tryParse(_sshPort.text) ?? 22);
-    await _settings.setSshUsername(_sshUsername.text.trim());
-    await _settings.setSshPassword(_sshPassword.text);
+    await _settings.setSshUsername(_sshEnabled ? _sshUsername.text.trim() : '');
+    await _settings.setSshPassword(_sshEnabled ? _sshPassword.text : '');
     await _settings.setLinuxComfyPath(_linuxComfyPath.text.trim());
     await _settings.setLinuxPythonCmd(_linuxPythonCmd.text.trim());
     await _settings.setWindowsComfyPath(
@@ -126,64 +136,124 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
 
           // ── Tuya ──────────────────────────────────────────────────────────
-          _SectionHeader('Tuya Smart Plug'),
-          _hint('Get these from iot.tuya.com → Cloud → your project'),
-          const SizedBox(height: 8),
-          _field(_tuyaClientId,     'Client ID'),
-          _field(_tuyaClientSecret, 'Client Secret', obscure: true),
-          _field(_tuyaDeviceId,     'Device ID'),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            value: _selectedRegion,
-            decoration: const InputDecoration(
-              labelText: 'Region',
-              border: OutlineInputBorder(),
-            ),
-            items: _regions.entries.map((e) =>
-              DropdownMenuItem(value: e.value, child: Text(e.key)),
-            ).toList(),
-            onChanged: (v) => setState(() => _selectedRegion = v!),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Tuya Smart Plug',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Switch(
+                value: _tuyaEnabled,
+                onChanged: (v) => setState(() => _tuyaEnabled = v),
+              ),
+            ],
           ),
+          if (_tuyaEnabled) ...[
+            _hint('Get these from iot.tuya.com → Cloud → your project'),
+            const SizedBox(height: 8),
+            _field(_tuyaClientId,     'Client ID'),
+            _field(_tuyaClientSecret, 'Client Secret', obscure: true),
+            _field(_tuyaDeviceId,     'Device ID'),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: _selectedRegion,
+              decoration: const InputDecoration(
+                labelText: 'Region',
+                border: OutlineInputBorder(),
+              ),
+              items: _regions.entries.map((e) =>
+                DropdownMenuItem(value: e.value, child: Text(e.key)),
+              ).toList(),
+              onChanged: (v) => setState(() => _selectedRegion = v!),
+            ),
+          ] else
+            _hint('Enable to control PC power via smart plug'),
           const SizedBox(height: 24),
 
           // ── ComfyUI ───────────────────────────────────────────────────────
           _SectionHeader('ComfyUI'),
-          _hint('Your PC\'s Tailscale IP + ComfyUI port, e.g. http://100.64.0.1:8188'),
           const SizedBox(height: 8),
-          _field(_comfyUrl, 'ComfyUI URL',
-              hint: 'http://100.x.x.x:8188',
-              keyboard: TextInputType.url),
-          const SizedBox(height: 24),
-
-          // ── SSH ───────────────────────────────────────────────────────────
-          _SectionHeader('SSH'),
-          const SizedBox(height: 8),
-
-          // Server OS selector
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Server OS:', style: TextStyle(fontSize: 14)),
-              const SizedBox(width: 16),
-              ChoiceChip(
-                label: const Text('Windows'),
-                selected: _settings.isWindows,
-                onSelected: (_) async {
-                  await _settings.setServerOs('windows');
-                  setState(() {});
-                },
-              ),
-              const SizedBox(width: 8),
-              ChoiceChip(
-                label: const Text('Linux'),
-                selected: _settings.isLinux,
-                onSelected: (_) async {
-                  await _settings.setServerOs('linux');
-                  setState(() {});
-                },
+              const Text('Auto-discover on startup',
+                  style: TextStyle(fontSize: 14)),
+              Switch(
+                value: _autoDiscovery,
+                onChanged: (v) => setState(() => _autoDiscovery = v),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          if (_autoDiscovery) ...[
+            _hint('App will scan local network for ComfyUI on startup'),
+            const SizedBox(height: 8),
+            const Text('Scan mode:', style: TextStyle(fontSize: 14)),
+            const SizedBox(height: 4),
+            Row(children: [
+              ChoiceChip(
+                label: const Text('Fast'),
+                selected: _scanMode == 'fast',
+                onSelected: (_) => setState(() => _scanMode = 'fast'),
+              ),
+              const SizedBox(width: 8),
+              ChoiceChip(
+                label: const Text('Thorough'),
+                selected: _scanMode == 'thorough',
+                onSelected: (_) => setState(() => _scanMode = 'thorough'),
+              ),
+            ]),
+            _hint(_scanMode == 'fast'
+                ? 'Scans only your current network (faster)'
+                : 'Scans common router subnets too (slower, more thorough)'),
+          ]
+          else ...[
+            _hint('Your PC\'s Tailscale IP + ComfyUI port, e.g. http://100.64.0.1:8188'),
+            const SizedBox(height: 8),
+            _field(_comfyUrl, 'ComfyUI URL',
+                hint: 'http://100.x.x.x:8188',
+                keyboard: TextInputType.url),
+          ],
+          const SizedBox(height: 24),
+
+          // ── SSH ───────────────────────────────────────────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('SSH Control',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Switch(
+                value: _sshEnabled,
+                onChanged: (v) => setState(() => _sshEnabled = v),
+              ),
+            ],
+          ),
+          if (_sshEnabled) ...[
+            const SizedBox(height: 8),
+
+            // Server OS selector
+            Row(
+              children: [
+                const Text('Server OS:', style: TextStyle(fontSize: 14)),
+                const SizedBox(width: 16),
+                ChoiceChip(
+                  label: const Text('Windows'),
+                  selected: _settings.isWindows,
+                  onSelected: (_) async {
+                    await _settings.setServerOs('windows');
+                    setState(() {});
+                  },
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Linux'),
+                  selected: _settings.isLinux,
+                  onSelected: (_) async {
+                    await _settings.setServerOs('linux');
+                    setState(() {});
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
           _hint(_settings.isWindows
               ? 'Enable OpenSSH Server: Settings → Apps → Optional Features'
               : 'Make sure SSH is enabled and ComfyUI is installed at ~/ComfyUI'),
@@ -275,6 +345,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 : const Icon(Icons.cable),
             label: Text(_testingSSH ? 'Testing...' : 'Test SSH Connection'),
           ),
+          ] else
+            _hint('Enable to start/stop ComfyUI and shut down the PC remotely'),
           const SizedBox(height: 32),
 
           // ── Save ──────────────────────────────────────────────────────────

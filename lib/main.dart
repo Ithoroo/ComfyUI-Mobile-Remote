@@ -48,6 +48,7 @@ class _MainShellState extends State<MainShell> {
   int _tab = 0;
   int _galleryKey = 0;
   int _generateKey = 0;
+  Map<String, dynamic>? _pendingSettings;
   late SettingsService _settings;
 
   @override
@@ -58,6 +59,7 @@ class _MainShellState extends State<MainShell> {
 
   Future<void> _onLoadSettings(Map<String, dynamic> settings) async {
     await GenerationPrefs.save(settings);
+    GenerationPrefs.pending = settings; // static handoff, read in GenerateScreen.initState
     setState(() {
       _tab = 1;
       _generateKey++;
@@ -67,6 +69,8 @@ class _MainShellState extends State<MainShell> {
   void _onTabChanged(int index) {
     setState(() {
       _tab = index;
+      _settings = SettingsService(widget.prefs); // refresh in case URL changed via discovery
+      if (index != 1) _pendingSettings = null; // clear once leaving generate
       if (index == 2) _galleryKey++;
     });
   }
@@ -83,7 +87,11 @@ class _MainShellState extends State<MainShell> {
     final screens = [
       HomeScreen(prefs: widget.prefs),
       comfyUrl.isNotEmpty
-          ? GenerateScreen(key: ValueKey(_generateKey), comfyUrl: comfyUrl)
+          ? GenerateScreen(
+              key: ValueKey(_generateKey),
+              comfyUrl: comfyUrl,
+              initialSettings: _pendingSettings,
+            )
           : const _NotConfigured(),
       comfyUrl.isNotEmpty
           ? GalleryScreen(

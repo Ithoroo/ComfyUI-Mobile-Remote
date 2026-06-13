@@ -83,7 +83,7 @@ A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 - ✅ **Windows & Linux server support** — toggle between OS in settings
 - ✅ **GPU selector for Linux** — NVIDIA, AMD (ROCm), CPU
 - ✅ **Custom ComfyUI path** — default or custom installation path
-- 🔲 **Local ComfyUI detection** — auto-discover ComfyUI instances on the local network
+- ✅ **Local ComfyUI detection** — auto-discover ComfyUI instances on the local network (fast & thorough scan modes)
 - 🔲 **Multi-instance selector** — detect multiple ComfyUI machines and switch by name
 - 🔲 **mDNS/Bonjour discovery** — zero-config connection without manually entering IP
 - 🔲 **Connection profiles** — save multiple server configurations and switch quickly

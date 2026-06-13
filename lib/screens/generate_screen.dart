@@ -11,7 +11,8 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 class GenerateScreen extends StatefulWidget {
   final String comfyUrl;
-  const GenerateScreen({super.key, required this.comfyUrl});
+  final Map<String, dynamic>? initialSettings;
+  const GenerateScreen({super.key, required this.comfyUrl, this.initialSettings});
 
   @override
   State<GenerateScreen> createState() => _GenerateScreenState();
@@ -87,7 +88,10 @@ class _GenerateScreenState extends State<GenerateScreen> {
   }
 
   Future<void> _loadPrefs() async {
-    final p = await GenerationPrefs.load();
+    // Static handoff from gallery takes priority, then constructor arg, then file
+    final pending = GenerationPrefs.pending;
+    GenerationPrefs.pending = null; // consume once
+    final p = pending ?? widget.initialSettings ?? await GenerationPrefs.load();
     debugPrint('[Generate] _loadPrefs: ${p.keys.toList()}');
     debugPrint('[Generate] _loadPrefs positive: ${p['positive']}');
     debugPrint('[Generate] _loadPrefs lora1: ${p['lora1']}');
@@ -109,8 +113,8 @@ class _GenerateScreenState extends State<GenerateScreen> {
       _lora4Strength = (p['lora4s']       as num?)?.toDouble() ?? _lora4Strength;
       _denoise       = (p['denoise']      as num?)?.toDouble() ?? _denoise;
       _useUpscale    = p['upscale']       ?? _useUpscale;
-      _width         = p['width']         ?? _width;
-      _height        = p['height']        ?? _height;
+      _width         = (p['width']  as num?)?.toInt() ?? _width;
+      _height        = (p['height'] as num?)?.toInt() ?? _height;
       _selectedResolution = p['resPreset'] ?? _selectedResolution;
       // Update text controllers to reflect loaded values
       _widthCtrl.text  = _width.toString();

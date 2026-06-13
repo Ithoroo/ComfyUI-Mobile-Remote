@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:permission_handler/permission_handler.dart';
 
 import '../services/comfy_service.dart';
 import '../services/png_metadata.dart';
@@ -50,6 +51,17 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
   Future<void> _loadLocal() async {
     try {
+      // Request storage/media permission (needed to read images from previous installs)
+      if (Platform.isAndroid) {
+        final photos = await Permission.photos.status;
+        final storage = await Permission.storage.status;
+        if (!photos.isGranted && !storage.isGranted) {
+          // Android 13+ uses photos, older uses storage
+          await Permission.photos.request();
+          await Permission.storage.request();
+        }
+      }
+
       final dir = Directory(_localDir);
       if (!await dir.exists()) return;
       final files = await dir
@@ -61,7 +73,9 @@ class _GalleryScreenState extends State<GalleryScreen> {
       // Sort newest first by modified date
       files.sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
       setState(() => _localImages = files);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[Gallery] _loadLocal error: $e');
+    }
   }
 
   Future<void> _loadRemote() async {

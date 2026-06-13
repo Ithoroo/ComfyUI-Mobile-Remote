@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/settings_service.dart';
 import '../services/tuya_service.dart';
 import '../services/ssh_service.dart';
+import '../services/network_discovery_service.dart';
 import 'comfy_screen.dart';
 import 'settings_screen.dart';
 
@@ -27,6 +29,9 @@ class _HomeScreenState extends State<HomeScreen> {
   PcState _pcState   = PcState.offline;
   bool _actionBusy   = false;
   String _statusMsg  = '';
+  bool _scanning     = false;
+  int _scanProgress  = 0;
+  int _scanTotal     = 1;
 
   Timer? _pollTimer;
 
@@ -39,6 +44,11 @@ class _HomeScreenState extends State<HomeScreen> {
     _initServices();
     _pollTimer = Timer.periodic(const Duration(seconds: 8), (_) => _pollStatus());
     _pollStatus();
+
+    // Auto-discover on startup if enabled
+    if (_settings.autoDiscovery) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scanNetwork());
+    }
   }
 
   @override
@@ -55,24 +65,30 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (!_settings.isConfigured) return;
 
-    _tuya = TuyaService(
-      clientId:     _settings.tuyaClientId,
-      clientSecret: _settings.tuyaClientSecret,
-      deviceId:     _settings.tuyaDeviceId,
-      baseUrl:      _settings.tuyaBaseUrl,
-    );
+    if (_settings.isTuyaConfigured) {
+      _tuya = TuyaService(
+        clientId:     _settings.tuyaClientId,
+        clientSecret: _settings.tuyaClientSecret,
+        deviceId:     _settings.tuyaDeviceId,
+        baseUrl:      _settings.tuyaBaseUrl,
+      );
+    }
 
-    _ssh = SshService(
-      host:             _settings.sshHost,
-      port:             _settings.sshPort,
-      username:         _settings.sshUsername,
-      password:         _settings.sshPassword,
-      isWindows:        _settings.isWindows,
-      linuxComfyPath:   _settings.linuxComfyPath,
-      linuxPythonCmd:   _settings.linuxPythonCmd,
-      linuxGpu:         _settings.linuxGpu,
-      windowsComfyPath: _settings.windowsComfyPath,
-    );
+    if (_settings.isSshConfigured) {
+      _ssh = SshService(
+        host:             _settings.sshHost,
+        port:             _settings.sshPort,
+        username:         _settings.sshUsername,
+        password:         _settings.sshPassword,
+        isWindows:        _settings.isWindows,
+        linuxComfyPath:   _settings.linuxComfyPath,
+        linuxPythonCmd:   _settings.linuxPythonCmd,
+        linuxGpu:         _settings.linuxGpu,
+        windowsComfyPath: _settings.windowsComfyPath,
+      );
+    } else {
+      _ssh = null;
+    }
   }
 
   // ── Status polling ─────────────────────────────────────────────────────────
@@ -81,17 +97,28 @@ class _HomeScreenState extends State<HomeScreen> {
   // 3. Check ComfyUI → if running, fully ready
 
   Future<void> _pollStatus() async {
-    if (_ssh == null || _tuya == null) return;
     debugPrint('[App] _pollStatus called');
 
     try {
-      // Step 1: Tuya plug state
-      final plugOn = await _tuya!.getPlugState();
-      debugPrint('[App] plugOn: $plugOn');
-      if (!plugOn) {
+      // Step 1: Tuya plug state (skip if not configured)
+      if (_tuya != null) {
+        final plugOn = await _tuya!.getPlugState();
+        debugPrint('[App] plugOn: $plugOn');
+        if (!plugOn) {
+          if (mounted) setState(() {
+            _pcState  = PcState.offline;
+            _statusMsg = '';
+          });
+          return;
+        }
+      }
+
+      // No SSH configured — just check if ComfyUI responds directly
+      if (_ssh == null) {
+        final comfyOk = await _checkComfyDirect();
         if (mounted) setState(() {
-          _pcState  = PcState.offline;
-          _statusMsg = '';
+          _pcState   = comfyOk ? PcState.comfyReady : PcState.offline;
+          _statusMsg = comfyOk ? '' : 'ComfyUI not reachable';
         });
         return;
       }
@@ -116,6 +143,18 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     } catch (e) {
       debugPrint('[App] pollStatus error: $e');
+    }
+  }
+
+  Future<bool> _checkComfyDirect() async {
+    if (_settings.comfyUrl.isEmpty) return false;
+    try {
+      final res = await http
+          .get(Uri.parse('${_settings.comfyUrl}/system_stats'))
+          .timeout(const Duration(seconds: 3));
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -247,6 +286,66 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _scanNetwork() async {
+    setState(() { _scanning = true; _scanProgress = 0; _scanTotal = 1; });
+    final found = await NetworkDiscoveryService.scan(
+      fastMode: _settings.scanMode == 'fast',
+      onProgress: (p, t) {
+        if (mounted) setState(() { _scanProgress = p; _scanTotal = t; });
+      },
+    );
+    if (!mounted) return;
+    setState(() => _scanning = false);
+
+    if (found.isEmpty) {
+      _showSnack('No ComfyUI instances found on local network');
+      return;
+    }
+
+    if (found.length == 1) {
+      // Auto-connect if only one found
+      await _settings.setComfyUrl(found.first.url);
+      _reinitServices();
+      _showSnack('Connected to ${found.first.url}');
+      return;
+    }
+
+    // Show picker if multiple found
+    final picked = await showDialog<ComfyInstance>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Select ComfyUI Instance'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: found.map((instance) => ListTile(
+            leading: const Icon(Icons.computer),
+            title: Text(instance.ip),
+            subtitle: Text('Port ${instance.port}'),
+            onTap: () => Navigator.pop(ctx, instance),
+          )).toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (picked != null) {
+      await _settings.setComfyUrl(picked.url);
+      _reinitServices();
+      _showSnack('Connected to ${picked.url}');
+    }
+  }
+
+  void _reinitServices() {
+    _pollTimer?.cancel();
+    _initServices();
+    _pollStatus();
+  }
+
   Future<bool> _confirmDialog(String title, String body) async {
     return await showDialog<bool>(
           context: context,
@@ -302,31 +401,59 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: TextStyle(color: cs.onSurfaceVariant)),
             const SizedBox(height: 32),
 
-            // ── Power On ───────────────────────────────────────────────────
-            FilledButton.icon(
-              onPressed: (_actionBusy || _pcState != PcState.offline) ? null : _powerOn,
-              icon: const Icon(Icons.power_settings_new),
-              label: const Text('Power On'),
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.green,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-            ),
-            const SizedBox(height: 16),
+            // ── Network scan (only when auto-discovery enabled) ───────────
+            if (_settings.autoDiscovery) ...[
+              if (_scanning) ...[
+                const SizedBox(height: 8),
+                LinearProgressIndicator(
+                  value: _scanTotal > 0 ? _scanProgress / _scanTotal : null,
+                ),
+                const SizedBox(height: 4),
+                Text('Scanning network... $_scanProgress/$_scanTotal',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                const SizedBox(height: 8),
+              ] else ...[
+                OutlinedButton.icon(
+                  onPressed: _actionBusy ? null : _scanNetwork,
+                  icon: const Icon(Icons.wifi_find),
+                  label: const Text('Scan for ComfyUI'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ],
 
-            // ── Start ComfyUI ──────────────────────────────────────────────
-            FilledButton.icon(
-              onPressed: (_actionBusy || _pcState != PcState.pcOnline) ? null : _startComfy,
-              icon: const Icon(Icons.play_arrow),
-              label: const Text('Start ComfyUI'),
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.deepPurple,
-                padding: const EdgeInsets.symmetric(vertical: 16),
+            // ── Power On (only if Tuya configured) ────────────────────────
+            if (_settings.isTuyaConfigured) ...[
+              FilledButton.icon(
+                onPressed: (_actionBusy || _pcState != PcState.offline) ? null : _powerOn,
+                icon: const Icon(Icons.power_settings_new),
+                label: const Text('Power On'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
+            ],
 
-            // ── Open ComfyUI ───────────────────────────────────────────────
+            // ── Start ComfyUI (only if SSH configured) ────────────────────
+            if (_settings.isSshConfigured) ...[
+              FilledButton.icon(
+                onPressed: (_actionBusy || _pcState != PcState.pcOnline) ? null : _startComfy,
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('Start ComfyUI'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // ── Open ComfyUI (always available) ───────────────────────────
             FilledButton.icon(
               onPressed: (_pcState == PcState.comfyReady) ? _openComfy : null,
               icon: const Icon(Icons.open_in_browser),
@@ -337,40 +464,42 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 16),
 
-            // ── View Logs ──────────────────────────────────────────────────
-            OutlinedButton.icon(
-              onPressed: _actionBusy ? null : _viewLogs,
-              icon: const Icon(Icons.article_outlined),
-              label: const Text('View ComfyUI Logs'),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
+            // ── View Logs / Shutdown (only if SSH configured) ─────────────
+            if (_settings.isSshConfigured) ...[
+              OutlinedButton.icon(
+                onPressed: _actionBusy ? null : _viewLogs,
+                icon: const Icon(Icons.article_outlined),
+                label: const Text('View ComfyUI Logs'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: (_actionBusy || !pcUp) ? null : _shutdown,
+                icon: const Icon(Icons.power_off, color: Colors.red),
+                label: const Text('Shutdown PC', style: TextStyle(color: Colors.red)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.red),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
 
-            // ── Shutdown ───────────────────────────────────────────────────
-            OutlinedButton.icon(
-              onPressed: (_actionBusy || !pcUp) ? null : _shutdown,
-              icon: const Icon(Icons.power_off, color: Colors.red),
-              label: const Text('Shutdown PC', style: TextStyle(color: Colors.red)),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Colors.red),
-                padding: const EdgeInsets.symmetric(vertical: 16),
+            // ── Reset (hard power cycle, only if Tuya configured) ─────────
+            if (_settings.isTuyaConfigured) ...[
+              OutlinedButton.icon(
+                onPressed: _actionBusy ? null : _resetPc,
+                icon: const Icon(Icons.restart_alt, color: Colors.orange),
+                label: const Text('Reset PC (Hard)', style: TextStyle(color: Colors.orange)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.orange),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-
-            // ── Reset (hard power cycle) ───────────────────────────────────
-            OutlinedButton.icon(
-              onPressed: _actionBusy ? null : _resetPc,
-              icon: const Icon(Icons.restart_alt, color: Colors.orange),
-              label: const Text('Reset PC (Hard)', style: TextStyle(color: Colors.orange)),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Colors.orange),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-            ),
-            const SizedBox(height: 24),
+              const SizedBox(height: 24),
+            ],
 
             // ── Not configured warning ─────────────────────────────────────
             if (!_settings.isConfigured)
@@ -383,7 +512,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'App not configured. Tap ⚙ to enter your Tuya, ComfyUI and SSH settings.',
+                        'App not configured. Tap ⚙ to enter your ComfyUI URL and SSH settings. Tuya smart plug is optional.',
                         style: TextStyle(color: cs.onErrorContainer),
                       ),
                     ),

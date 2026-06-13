@@ -42,7 +42,13 @@ class SettingsService {
   bool get isWindows => serverOs == 'windows';
   bool get isLinux   => serverOs == 'linux';
 
-  // ── Windows specific ──────────────────────────────────────────────────────
+  // ── Discovery ─────────────────────────────────────────────────────────────
+  bool get autoDiscovery => _prefs.getBool('auto_discovery') ?? true;
+  Future<void> setAutoDiscovery(bool v) => _prefs.setBool('auto_discovery', v);
+
+  // 'fast' = detected subnet only, 'thorough' = all common subnets
+  String get scanMode => _prefs.getString('scan_mode') ?? 'fast';
+  Future<void> setScanMode(String v) => _prefs.setString('scan_mode', v);
   String get windowsComfyPath    => _prefs.getString('windows_comfy_path') ?? '';
   bool   get windowsCustomPath   => windowsComfyPath.isNotEmpty;
   Future<void> setWindowsComfyPath(String v) => _prefs.setString('windows_comfy_path', v);
@@ -57,10 +63,13 @@ class SettingsService {
   bool get isCpu    => linuxGpu == 'cpu';
   /// True when the minimum required fields are filled in.
   bool get isConfigured =>
+      (comfyUrl.isNotEmpty || autoDiscovery);
+
+  bool get isSshConfigured =>
+      sshHost.isNotEmpty && sshUsername.isNotEmpty;
+
+  bool get isTuyaConfigured =>
       tuyaClientId.isNotEmpty &&
       tuyaClientSecret.isNotEmpty &&
-      tuyaDeviceId.isNotEmpty &&
-      comfyUrl.isNotEmpty &&
-      sshHost.isNotEmpty &&
-      sshUsername.isNotEmpty;
+      tuyaDeviceId.isNotEmpty;
 }

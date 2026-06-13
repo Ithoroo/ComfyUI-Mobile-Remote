@@ -16,6 +16,7 @@ dependencies:
   path_provider: ^2.1.4           # For saving files to device
   wakelock_plus: ^1.1.4           # Keep CPU alive during generation
   flutter_foreground_task: ^8.0.0 # Foreground service for background generation
+  permission_handler: ^11.3.1     # Storage permission for gallery
 
 dev_dependencies:
   flutter_test:

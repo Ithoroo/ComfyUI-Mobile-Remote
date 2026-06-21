@@ -8,8 +8,9 @@ class ComfyInstance {
   final String ip;
   final int port;
   final String url;
+  final bool hasSsh;
 
-  ComfyInstance({required this.ip, required this.port})
+  ComfyInstance({required this.ip, required this.port, this.hasSsh = false})
       : url = 'http://$ip:$port';
 
   @override
@@ -96,11 +97,13 @@ class NetworkDiscoveryService {
       for (int i = 1; i <= 254; i++) {
         for (final port in _ports) {
           final ip = '$subnet.$i';
-          futures.add(_checkHost(ip, port).then((ok) {
+          futures.add(_checkHost(ip, port).then((ok) async {
             if (ok && !foundIps.contains('$ip:$port')) {
               foundIps.add('$ip:$port');
-              debugPrint('[Discovery] Found ComfyUI at $ip:$port');
-              found.add(ComfyInstance(ip: ip, port: port));
+              // Same host usually runs SSH too — check port 22
+              final hasSsh = await _checkSshPort(ip);
+              debugPrint('[Discovery] Found ComfyUI at $ip:$port (SSH: $hasSsh)');
+              found.add(ComfyInstance(ip: ip, port: port, hasSsh: hasSsh));
             }
             scanned++;
             onProgress?.call(scanned, total);
@@ -117,6 +120,40 @@ class NetworkDiscoveryService {
 
     debugPrint('[Discovery] Scan complete. Found: ${found.length}');
     return found;
+  }
+
+  /// Check if SSH is running on a host by connecting to port 22
+  /// and reading the SSH protocol banner (servers send "SSH-2.0-..." on connect)
+  static Future<bool> _checkSshPort(String ip) async {
+    Socket? socket;
+    try {
+      socket = await Socket.connect(ip, 22,
+          timeout: const Duration(milliseconds: 800));
+      // SSH servers send a banner like "SSH-2.0-OpenSSH_..." immediately
+      final completer = Completer<bool>();
+      final sub = socket.listen(
+        (data) {
+          final banner = String.fromCharCodes(data);
+          if (!completer.isCompleted) {
+            completer.complete(banner.startsWith('SSH-'));
+          }
+        },
+        onError: (_) {
+          if (!completer.isCompleted) completer.complete(false);
+        },
+        onDone: () {
+          if (!completer.isCompleted) completer.complete(false);
+        },
+      );
+      final result = await completer.future
+          .timeout(const Duration(milliseconds: 800), onTimeout: () => false);
+      await sub.cancel();
+      return result;
+    } catch (_) {
+      return false;
+    } finally {
+      socket?.destroy();
+    }
   }
 
   /// First does a fast TCP check, then verifies it's actually ComfyUI

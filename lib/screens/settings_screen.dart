@@ -62,7 +62,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _selectedRegion   = _settings.tuyaBaseUrl;
     _winCustomPath    = _settings.windowsCustomPath;
     _tuyaEnabled      = _settings.isTuyaConfigured;
-    _sshEnabled       = _settings.isSshConfigured;
+    _sshEnabled       = _settings.sshEnabled;
     _autoDiscovery    = _settings.autoDiscovery;
     _scanMode         = _settings.scanMode;
   }
@@ -85,6 +85,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await _settings.setComfyUrl(_autoDiscovery ? '' : _comfyUrl.text.trim());
     await _settings.setAutoDiscovery(_autoDiscovery);
     await _settings.setScanMode(_scanMode);
+    await _settings.setSshEnabled(_sshEnabled);
     await _settings.setSshHost(_sshEnabled ? _sshHost.text.trim() : '');
     await _settings.setSshPort(int.tryParse(_sshPort.text) ?? 22);
     await _settings.setSshUsername(_sshEnabled ? _sshUsername.text.trim() : '');
@@ -276,29 +277,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           if (_settings.isWindows) ...[
             const SizedBox(height: 12),
-            Row(
-              children: [
-                const Text('ComfyUI Path:', style: TextStyle(fontSize: 14)),
-                const SizedBox(width: 16),
-                ChoiceChip(
-                  label: const Text('Default'),
-                  selected: !_winCustomPath,
-                  onSelected: (_) => setState(() => _winCustomPath = false),
-                ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: const Text('Custom'),
-                  selected: _winCustomPath,
-                  onSelected: (_) => setState(() => _winCustomPath = true),
-                ),
-              ],
-            ),
+            const Text('ComfyUI Type:', style: TextStyle(fontSize: 14)),
+            const SizedBox(height: 4),
+            Wrap(spacing: 8, children: [
+              ChoiceChip(
+                label: const Text('Desktop'),
+                selected: _settings.windowsInstallType == 'desktop' && !_winCustomPath,
+                onSelected: (_) async {
+                  await _settings.setWindowsInstallType('desktop');
+                  setState(() => _winCustomPath = false);
+                },
+              ),
+              ChoiceChip(
+                label: const Text('Portable'),
+                selected: _settings.windowsInstallType == 'portable' && !_winCustomPath,
+                onSelected: (_) async {
+                  await _settings.setWindowsInstallType('portable');
+                  setState(() => _winCustomPath = false);
+                },
+              ),
+              ChoiceChip(
+                label: const Text('Custom'),
+                selected: _winCustomPath,
+                onSelected: (_) => setState(() => _winCustomPath = true),
+              ),
+            ]),
+            const SizedBox(height: 8),
             if (_winCustomPath) ...[
-              const SizedBox(height: 8),
               _field(_winComfyPath, 'ComfyUI Path',
                   hint: r'C:\custom\path\ComfyUI.exe'),
-            ] else
-              _hint(r'Default: %LOCALAPPDATA%\Programs\ComfyUI\ComfyUI.exe'),
+            ] else if (_settings.windowsInstallType == 'desktop')
+              _hint(r'ComfyUI Desktop. Path: %LOCALAPPDATA%\Programs\ComfyUI\Comfy Desktop.exe — needs --listen 0.0.0.0 in launch args for network access.')
+            else
+              _hint(r'Portable/standalone. Path: %LOCALAPPDATA%\Programs\ComfyUI\ComfyUI.exe'),
           ],
           if (_settings.isLinux) ...[
             const SizedBox(height: 12),

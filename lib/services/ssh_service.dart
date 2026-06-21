@@ -11,6 +11,9 @@ class SshService {
   final String linuxPythonCmd;
   final String linuxGpu;
   final String windowsComfyPath; // empty = use default
+  final String windowsInstallType; // 'desktop', 'portable', 'custom'
+  final String desktopSourcePath;
+  final String desktopDataPath;
 
   // Windows paths (use PowerShell env vars)
   static const _winLogPath  = r'$env:USERPROFILE\comfyui.log';
@@ -29,6 +32,9 @@ class SshService {
     this.linuxPythonCmd = 'python',
     this.linuxGpu = 'nvidia',
     this.windowsComfyPath = '',
+    this.windowsInstallType = 'desktop',
+    this.desktopSourcePath = '',
+    this.desktopDataPath = '',
   });
 
   Future<SSHClient> _connect() async {
@@ -78,16 +84,50 @@ class SshService {
           ? 'HSA_OVERRIDE_GFX_VERSION=11.0.0 '
           : linuxGpu == 'cpu' ? '' : '';
       final extraArgs = linuxGpu == 'cpu' ? ' --cpu' : '';
-      // Use custom path if set, otherwise default AppData location
-      final comfyExe = windowsComfyPath.isNotEmpty
-          ? windowsComfyPath
-          : 'C:\\Users\\$username\\AppData\\Local\\Programs\\ComfyUI\\ComfyUI.exe';
+      // Resolve the Windows executable path based on install type
+      String comfyExe;
+      bool isDesktop = false;
+      if (windowsComfyPath.isNotEmpty) {
+        comfyExe = windowsComfyPath; // custom path
+      } else if (windowsInstallType == 'desktop') {
+        comfyExe = 'C:\\Users\\$username\\AppData\\Local\\Programs\\ComfyUI\\Comfy Desktop.exe';
+        isDesktop = true;
+      } else {
+        comfyExe = 'C:\\Users\\$username\\AppData\\Local\\Programs\\ComfyUI\\ComfyUI.exe';
+      }
       final logPath  = isWindows
           ? 'C:\\Users\\$username\\comfyui.log'
           : _linuxLogPath;
-      final cmd = isWindows
-          ? 'powershell -Command "\$wmi = [wmiclass]\'Win32_Process\'; \$wmi.Create(\'cmd.exe /c \\\"$comfyExe\\\" > $logPath 2>&1\')"'
-          : 'nohup bash -c "cd $linuxComfyPath && ${gpuArgs}$linuxPythonCmd main.py --listen 0.0.0.0$extraArgs" > $_linuxLogPath 2>&1 &';
+      final String cmd;
+      if (!isWindows) {
+        cmd = 'nohup bash -c "cd $linuxComfyPath && ${gpuArgs}$linuxPythonCmd main.py --listen 0.0.0.0$extraArgs" > $_linuxLogPath 2>&1 &';
+      } else if (isDesktop) {
+        // ComfyUI Desktop: run the server directly via venv python.
+        // Use $env:USERPROFILE so the path resolves to the real Windows
+        // profile folder (SSH username may differ, e.g. an email login).
+        // Relative-to-profile paths (defaults can be overridden in settings):
+        final dataRel = desktopDataPath.isNotEmpty
+            ? desktopDataPath
+            : r'Documents\ComfyUI';
+        final srcRel = desktopSourcePath.isNotEmpty
+            ? desktopSourcePath
+            : r'ComfyUI-Installs\ComfyUI\ComfyUI';
+        // Build a PowerShell script that resolves $env:USERPROFILE first,
+        // then launches via WMI so it survives the SSH session closing.
+        cmd = 'powershell -Command "'
+            '\$up = \$env:USERPROFILE; '
+            '\$data = Join-Path \$up \'$dataRel\'; '
+            '\$src = Join-Path \$up \'$srcRel\'; '
+            '\$py = Join-Path \$data \'.venv\\Scripts\\python.exe\'; '
+            '\$log = Join-Path \$up \'comfyui.log\'; '
+            '\$main = Join-Path \$src \'main.py\'; '
+            '\$a = \'-s \"\' + \$main + \'\" --base-directory \"\' + \$data + \'\" --user-directory \"\' + (Join-Path \$data \'user\') + \'\" --listen 0.0.0.0 --port 8000 --enable-manager --output-directory \"\' + (Join-Path \$data \'output\') + \'\"\'; '
+            '\$wmi = [wmiclass]\'Win32_Process\'; '
+            '\$wmi.Create(\'cmd.exe /c \"\' + \$py + \'\" \' + \$a + \' > \"\' + \$log + \'\" 2>&1\')"';
+      } else {
+        // Portable .exe — WMI with log capture, survives SSH disconnect
+        cmd = 'powershell -Command "\$wmi = [wmiclass]\'Win32_Process\'; \$wmi.Create(\'cmd.exe /c \\\"$comfyExe\\\" > $logPath 2>&1\')"';
+      }
       print('[SSH] startComfy cmd: $cmd');
       final session = await client.execute(cmd);
       await session.stdout.drain();
@@ -129,9 +169,18 @@ class SshService {
   Future<bool> killComfy() async {
     try {
       final client = await _connect();
-      final cmd = isWindows
-          ? 'taskkill /F /IM ComfyUI.exe /T'
-          : 'pkill -f "python main.py"';
+      final String cmd;
+      if (!isWindows) {
+        cmd = 'pkill -f "python main.py"';
+      } else if (windowsInstallType == 'desktop') {
+        // Desktop runs as python.exe — kill only the one running main.py,
+        // not every python process on the machine
+        cmd = 'powershell -Command "Get-CimInstance Win32_Process | '
+            'Where-Object { \$_.CommandLine -like \'*ComfyUI*main.py*\' } | '
+            'ForEach-Object { Stop-Process -Id \$_.ProcessId -Force }"';
+      } else {
+        cmd = 'taskkill /F /IM ComfyUI.exe /T';
+      }
       final session = await client.execute(cmd);
       await session.stdout.drain();
       await session.done;

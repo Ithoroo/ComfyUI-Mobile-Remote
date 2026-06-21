@@ -299,6 +299,8 @@ class ComfyService {
         for (final img in nodeImages) {
           if (img['type'] == 'output') {
             final fname = img['filename'] as String;
+            // Only show images generated through this app (mobile_ prefix)
+            if (!fname.startsWith('mobile')) continue;
             if (seen.add(fname)) {
               images.add({
                 'filename': fname,

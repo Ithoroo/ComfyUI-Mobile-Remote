@@ -52,6 +52,13 @@ class SettingsService {
   String get windowsComfyPath    => _prefs.getString('windows_comfy_path') ?? '';
   bool   get windowsCustomPath   => windowsComfyPath.isNotEmpty;
   Future<void> setWindowsComfyPath(String v) => _prefs.setString('windows_comfy_path', v);
+  String get windowsInstallType => _prefs.getString('windows_install_type') ?? 'desktop';
+  Future<void> setWindowsInstallType(String v) => _prefs.setString('windows_install_type', v);
+  // Desktop install: paths relative to %USERPROFILE% (resolved on PC side)
+  String get desktopSourcePath => _prefs.getString('desktop_source') ?? r'ComfyUI-Installs\ComfyUI\ComfyUI';
+  String get desktopDataPath   => _prefs.getString('desktop_data')   ?? r'Documents\ComfyUI';
+  Future<void> setDesktopSourcePath(String v) => _prefs.setString('desktop_source', v);
+  Future<void> setDesktopDataPath(String v)   => _prefs.setString('desktop_data', v);
   String get linuxComfyPath  => _prefs.getString('linux_comfy_path')  ?? '~/ComfyUI';
   String get linuxPythonCmd  => _prefs.getString('linux_python_cmd')  ?? 'python';
   String get linuxGpu        => _prefs.getString('linux_gpu')         ?? 'nvidia';
@@ -66,7 +73,11 @@ class SettingsService {
       (comfyUrl.isNotEmpty || autoDiscovery);
 
   bool get isSshConfigured =>
-      sshHost.isNotEmpty && sshUsername.isNotEmpty;
+      sshEnabled && sshHost.isNotEmpty && sshUsername.isNotEmpty;
+
+  // Explicit toggle — defaults to true, user can turn off to suppress SSH
+  bool get sshEnabled => _prefs.getBool('ssh_enabled') ?? true;
+  Future<void> setSshEnabled(bool v) => _prefs.setBool('ssh_enabled', v);
 
   bool get isTuyaConfigured =>
       tuyaClientId.isNotEmpty &&

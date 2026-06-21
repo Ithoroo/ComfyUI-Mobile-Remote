@@ -85,6 +85,9 @@ class _HomeScreenState extends State<HomeScreen> {
         linuxPythonCmd:   _settings.linuxPythonCmd,
         linuxGpu:         _settings.linuxGpu,
         windowsComfyPath: _settings.windowsComfyPath,
+        windowsInstallType: _settings.windowsInstallType,
+        desktopSourcePath: _settings.desktopSourcePath,
+        desktopDataPath: _settings.desktopDataPath,
       );
     } else {
       _ssh = null;
@@ -305,8 +308,10 @@ class _HomeScreenState extends State<HomeScreen> {
     if (found.length == 1) {
       // Auto-connect if only one found
       await _settings.setComfyUrl(found.first.url);
+      await _maybeSetSshHost(found.first);
       _reinitServices();
-      _showSnack('Connected to ${found.first.url}');
+      _showSnack('Connected to ${found.first.url}'
+          '${found.first.hasSsh ? " (SSH detected)" : ""}');
       return;
     }
 
@@ -320,7 +325,8 @@ class _HomeScreenState extends State<HomeScreen> {
           children: found.map((instance) => ListTile(
             leading: const Icon(Icons.computer),
             title: Text(instance.ip),
-            subtitle: Text('Port ${instance.port}'),
+            subtitle: Text('Port ${instance.port}'
+                '${instance.hasSsh ? " • SSH available" : ""}'),
             onTap: () => Navigator.pop(ctx, instance),
           )).toList(),
         ),
@@ -335,8 +341,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (picked != null) {
       await _settings.setComfyUrl(picked.url);
+      await _maybeSetSshHost(picked);
       _reinitServices();
-      _showSnack('Connected to ${picked.url}');
+      _showSnack('Connected to ${picked.url}'
+          '${picked.hasSsh ? " (SSH detected)" : ""}');
+    }
+  }
+
+  /// If SSH was detected and enabled and host field is empty, auto-fill it
+  Future<void> _maybeSetSshHost(ComfyInstance instance) async {
+    if (instance.hasSsh && _settings.sshEnabled && _settings.sshHost.isEmpty) {
+      await _settings.setSshHost(instance.ip);
+      debugPrint('[App] auto-filled SSH host: ${instance.ip}');
     }
   }
 
@@ -434,6 +450,33 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: FilledButton.styleFrom(
                   backgroundColor: Colors.green,
                   padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // ── SSH detected but needs credentials ─────────────────────────
+            if (_settings.sshEnabled && !_settings.isSshConfigured && _settings.sshHost.isNotEmpty) ...[
+              Card(
+                color: Colors.blue.withOpacity(0.1),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline, color: Colors.blue),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'SSH detected at ${_settings.sshHost}. Add username & password in settings to enable PC control.',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _openSettings,
+                        child: const Text('Setup'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 16),

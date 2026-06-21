@@ -21,13 +21,15 @@ A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 ## Features
 
 ### 🔌 Power & Connectivity
+- **Auto-discovery** — automatically finds ComfyUI instances on your local network (on by default)
 - Turn your PC on/off via **Tuya smart plug** (optional)
 - **Hard reset** (power cycle) for frozen PC (requires Tuya)
 - Real-time PC status monitoring (Offline → Booting → Online → ComfyUI Ready)
-- Remote **SSH control** — start ComfyUI, view logs, shutdown PC
+- Remote **SSH control** (optional) — start ComfyUI, view logs, shutdown PC
+- **ComfyUI Desktop & Portable support** — works with both the Electron Desktop app and legacy portable installs
 - **Windows & Linux server support** — toggle between OS in settings
 - **GPU selector for Linux** — NVIDIA, AMD (ROCm) or CPU
-- **Custom ComfyUI path** — use default or set a custom installation path
+- **Custom ComfyUI path** — Desktop, Portable, or a custom installation path
 
 ### 🎨 Image Generation
 - 4 LoRA slots with strength sliders
@@ -63,6 +65,8 @@ A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 - Generation settings can be restored from any saved image via Gallery → fullscreen → tune icon
 - The app connects to ComfyUI running on your **PC/server** — it does not run ComfyUI locally on the phone
 - ComfyUI history tab shows images stored on the **PC's** output folder — local tab shows images saved on the **phone**
+- **SSH and Tuya are both optional** — without them the app works as a pure remote generation client (connect to an already-running ComfyUI)
+- **ComfyUI Desktop** users: add `--listen 0.0.0.0` to the launch arguments so the server is reachable over the network
 - Tested on **RedMagic 10S Pro** (Android 16) and **OnePlus Ace 3** (Android 14)
 - ⚠️ **iOS/iPadOS** — code is implemented but not yet tested on a real device
 - ⚠️ **Linux server support** — implemented but not yet tested, feedback welcome
@@ -82,8 +86,11 @@ A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 ### 🔌 Networking
 - ✅ **Windows & Linux server support** — toggle between OS in settings
 - ✅ **GPU selector for Linux** — NVIDIA, AMD (ROCm), CPU
-- ✅ **Custom ComfyUI path** — default or custom installation path
+- ✅ **Custom ComfyUI path** — Desktop, Portable, or custom installation path
+- ✅ **ComfyUI Desktop support** — launches the Electron app's server directly over SSH
 - ✅ **Local ComfyUI detection** — auto-discover ComfyUI instances on the local network (fast & thorough scan modes)
+- ✅ **SSH auto-detection** — detects SSH on the discovered host and offers to configure it
+- ✅ **Optional SSH & Tuya** — both can be disabled for a pure generation client
 - 🔲 **Multi-instance selector** — detect multiple ComfyUI machines and switch by name
 - 🔲 **mDNS/Bonjour discovery** — zero-config connection without manually entering IP
 - 🔲 **Connection profiles** — save multiple server configurations and switch quickly
@@ -126,8 +133,8 @@ A Flutter mobile app for remotely controlling ComfyUI from your phone or tablet.
 
 - Flutter 3.x+
 - Android 10+ or iOS 16+
-- ComfyUI running on a Windows or Linux machine accessible via Tailscale or local network
-- SSH access to the server
+- ComfyUI running on a Windows or Linux machine accessible via local network or Tailscale
+- SSH access to the server (optional — only for remote start/stop/shutdown)
 - Tuya smart plug (optional) — required only for remote power on/off and hard reset
 
 ---
@@ -164,15 +171,17 @@ Open the app and go to **Settings** (gear icon), fill in:
 3. Link your smart plug device
 4. Copy Client ID, Client Secret and Device ID to app settings
 
-### 4. SSH setup
+### 4. SSH setup (optional)
 
-The app uses SSH to:
-- Check if PC is reachable
-- Start ComfyUI
+SSH is optional. When enabled, the app uses it to:
+- Check if the PC is reachable
+- Start ComfyUI (supports both Desktop and Portable installs)
 - View ComfyUI logs
-- Shutdown PC
+- Shutdown the PC
 
 On Windows enable OpenSSH Server in **Settings → Optional Features → OpenSSH Server**.
+
+**ComfyUI Desktop note:** the Desktop app is an Electron launcher, so the app starts the underlying server directly via its bundled Python. Make sure `--listen 0.0.0.0` is in the Desktop launch arguments so the server is reachable over the network. If your install paths differ from the defaults, set them under **Settings → ComfyUI Type → Desktop**.
 
 ### 5. iOS only — allow HTTP
 
@@ -221,6 +230,7 @@ lib/
     ├── tuya_service.dart       # Tuya smart plug API
     ├── ssh_service.dart        # SSH commands
     ├── comfy_service.dart      # ComfyUI API + workflow builder
+    ├── network_discovery_service.dart # Local network ComfyUI/SSH scanner
     ├── generation_prefs.dart   # Generation settings persistence
     └── png_metadata.dart       # PNG tEXt chunk reader/writer
 ```

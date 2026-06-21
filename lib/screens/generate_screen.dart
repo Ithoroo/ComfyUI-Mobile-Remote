@@ -62,8 +62,13 @@ class _GenerateScreenState extends State<GenerateScreen> {
   int             _currentImage = 0;
 
   // ── Queue ──────────────────────────────────────────────────────────────────
-  final List<Map<String, dynamic>> _queue = [];
-  bool _processingQueue = false;
+  // STATIC: shared across all GenerateScreen instances. When settings are
+  // loaded from the gallery, a NEW GenerateScreen is built (key change), but
+  // the queue and the "is processing" flag must persist so a second instance
+  // doesn't start a parallel processing loop and interleave prompts.
+  static final List<Map<String, dynamic>> _queue = [];
+  static bool _processingQueue = false;
+  static bool _queueLock = false;
 
   // Presets — 'Custom' = user enters their own resolution
   static const _resolutions = {
@@ -260,8 +265,15 @@ class _GenerateScreenState extends State<GenerateScreen> {
   }
 
   Future<void> _processQueue() async {
-    if (_processingQueue || _queue.isEmpty) return;
+    // Synchronous guard — set BEFORE any await to prevent two concurrent loops
+    if (_queueLock) return;
+    _queueLock = true;
+    if (_processingQueue || _queue.isEmpty) {
+      _queueLock = false;
+      return;
+    }
     _processingQueue = true;
+    _queueLock = false;
     await WakelockPlus.enable();
 
     // Init foreground service
@@ -280,7 +292,6 @@ class _GenerateScreenState extends State<GenerateScreen> {
       ),
     );
 
-    // Request notification permission and start service
     final notifPerm = await FlutterForegroundTask.checkNotificationPermission();
     if (notifPerm != NotificationPermission.granted) {
       await FlutterForegroundTask.requestNotificationPermission();
@@ -291,16 +302,18 @@ class _GenerateScreenState extends State<GenerateScreen> {
       notificationText: 'Starting generation...',
     );
 
+    // Pull jobs off the FRONT one at a time, removing BEFORE running
+    // so a job pressed mid-run can't collide with the running index
     while (_queue.isNotEmpty) {
-      final job = _queue.first;
+      final job = _queue.removeAt(0);
+      if (mounted) setState(() {});
       final batch = job['batch'] as int;
       final queueLen = _queue.length;
       await FlutterForegroundTask.updateService(
         notificationTitle: 'ComfyUI Remote — Generating',
-        notificationText: 'Batch of $batch${queueLen > 1 ? " • ${queueLen - 1} more in queue" : ""}',
+        notificationText: 'Batch of $batch${queueLen > 0 ? " • $queueLen more in queue" : ""}',
       );
       await _runJob(job);
-      if (mounted) setState(() => _queue.removeAt(0));
     }
 
     await FlutterForegroundTask.stopService();
@@ -309,6 +322,7 @@ class _GenerateScreenState extends State<GenerateScreen> {
   }
 
   Future<void> _runJob(Map<String, dynamic> job) async {
+    debugPrint('[Generate] _runJob START — queue length: ${_queue.length}, prompt: ${job['positive']}');
     final checkpoint = job['checkpoint'] as String;
     final positive   = job['positive']   as String;
     final negative   = job['negative']   as String;
@@ -339,7 +353,7 @@ class _GenerateScreenState extends State<GenerateScreen> {
       if (!await dlDir.exists()) await dlDir.create(recursive: true);
 
       for (int i = 0; i < batch; i++) {
-        final qInfo = _queue.length > 1 ? ' (${_queue.length - 1} queued)' : '';
+        final qInfo = _queue.isNotEmpty ? ' (${_queue.length} queued)' : '';
         final seed = randomSeed ? Random().nextInt(2147483647) : baseSeed + i;
         if (mounted) setState(() => _status = 'Image ${i + 1}/$batch — queuing$qInfo');
 
@@ -363,14 +377,16 @@ class _GenerateScreenState extends State<GenerateScreen> {
         );
 
         final promptId = await _comfy.queuePrompt(workflow);
+        debugPrint('[Generate] job image ${i+1}/$batch — promptId: $promptId, seed: $seed');
         if (mounted) setState(() => _status = 'Image ${i + 1}/$batch — generating$qInfo');
         await FlutterForegroundTask.updateService(
           notificationTitle: 'ComfyUI Remote — Generating',
-          notificationText: 'Image ${i + 1}/$batch${_queue.length > 1 ? " • ${_queue.length - 1} more in queue" : ""}',
+          notificationText: 'Image ${i + 1}/$batch${_queue.isNotEmpty ? " • ${_queue.length} more in queue" : ""}',
         );
 
         final result = await _comfy.waitForResultMap(promptId);
         final targetFile = result['upscaled'] ?? result['regular'];
+        debugPrint('[Generate] promptId $promptId → file: $targetFile');
         if (targetFile == null) throw Exception('No output image found');
         final imageBytes = await _comfy.getImage(targetFile);
         debugPrint('[Generate] got image: $targetFile (upscaled: ${result['upscaled'] != null})');
@@ -405,7 +421,7 @@ class _GenerateScreenState extends State<GenerateScreen> {
       return;
     }
     _savePrefs();
-    setState(() => _queue.insert(0, _captureSettings()));
+    setState(() => _queue.add(_captureSettings()));
     if (!_processingQueue) _processQueue();
   }
 
@@ -706,11 +722,11 @@ class _GenerateScreenState extends State<GenerateScreen> {
             const SizedBox(height: 8),
 
             // ── Queue status ───────────────────────────────────────────────
-            if (_queue.length > 1)
+            if (_queue.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
-                  '${_queue.length - 1} job${_queue.length > 2 ? "s" : ""} waiting in queue',
+                  '${_queue.length} job${_queue.length > 1 ? "s" : ""} waiting in queue',
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.deepPurple),
                 ),
